@@ -1,0 +1,41 @@
+/* MultiPlay 追加分のスタイル（RecPlay のデザイン言語・緑系パレットに合わせる） */
+.change-btn { background: #1d4a34; border: 1px solid #2a5a44; border-radius: 10px; padding: 6px 12px; color: #a9d9bd; font-size: 12px; }
+.change-btn:active { background: #256b47; }
+.track-mixer { margin: 10px 10px 0; border: 1px solid #2a5a44; border-radius: 10px; background: #17362a; overflow: hidden; }
+.track-mixer-title { font-size: 12px; color: #82b294; padding: 8px 12px 4px; letter-spacing: 0.4px; }
+.track-row { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-bottom: 1px solid #1b3327; min-height: 40px; }
+.track-row:last-child { border-bottom: none; }
+.track-name { font-size: 14px; font-weight: 600; color: #eeeeff; min-width: 5.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.track-ms { width: 30px; height: 30px; border-radius: 10px; border: 1px solid #2a5a44; background: #1d4a34; color: #a9d9bd; cursor: pointer; font-weight: bold; font-size: 12px; flex-shrink: 0; }
+.track-ms.on-mute { background: #5a2438; border-color: #8a3a5a; color: #ffb0c0; }
+.track-ms.on-solo { background: #16a34a; border-color: #16a34a; color: #fff; }
+.track-vol { flex: 1; accent-color: #16a34a; }
+.track-vol-val { font-size: 11px; color: #82b294; width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* 管理画面（v1 の mp- クラスを RecPlay 緑系に合わせて移植） */
+.mp-admin { padding: 10px 12px 48px; max-width: 720px; margin: 0 auto; }
+.mp-back { font-size: 13px; padding: 6px 12px; background: linear-gradient(135deg, #14532d, #1d7a44); color: #a9f0c5; border: 1px solid #2a5a44; border-radius: 8px; cursor: pointer; }
+.mp-admin .mp-title { margin: 10px 0 0; font-size: 17px; font-weight: 700; color: #eeeeff; }
+.mp-admin .mp-subtitle { margin: 2px 0 10px; color: #82b294; font-size: 12px; }
+.mp-admin-msg { background: #1d4a34; border: 1px solid #2a5a44; color: #b8ffd9; border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+.mp-admin-row { display: flex; align-items: center; gap: 10px; margin: 10px 0; flex-wrap: wrap; }
+.mp-admin-row.sticky { position: sticky; bottom: 0; padding: 10px 0; background: #101d15; }
+.mp-admin-h { margin: 18px 0 8px; font-size: 14px; color: #63e6a4; }
+.mp-admin-track { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border: 1px solid #2a5a44; border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; background: #17362a; }
+.mp-input { padding: 9px 10px; border: 1px solid #2a5a44; border-radius: 8px; font-size: 14px; background: #0d2016; color: #eeeeff; }
+.mp-input.grow { flex: 1; min-width: 120px; }
+.mp-input.small { width: 90px; }
+.mp-num { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #a9d9bd; }
+.mp-nudges { display: flex; gap: 4px; }
+.mp-btn { border: 1px solid #2a5a44; border-radius: 10px; padding: 9px 16px; background: #1d4a34; color: #a9d9bd; cursor: pointer; font-size: 13px; }
+.mp-btn:disabled { opacity: 0.45; }
+.mp-btn.sub { background: #1d4a34; color: #a9d9bd; }
+.mp-btn.tiny { padding: 5px 8px; font-size: 11px; }
+.mp-btn.primary { background: linear-gradient(135deg, #16a34a, #63e6a4); border: none; color: #fff; font-weight: bold; }
+.mp-btn.danger { background: #5a2438; border-color: #8a3a5a; color: #ffb0c0; }
+.mp-admin .mp-song-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 14px 16px; margin-bottom: 8px; background: #17362a; border: 1px solid #2a5a44; border-radius: 10px; color: #eeeeff; font-size: 14px; cursor: pointer; }
+.mp-admin .mp-song-title { flex: 1; font-weight: 600; }
+.mp-admin .mp-song-meta { font-size: 11px; color: #82b294; }
+.mp-admin .mp-song-arrow { color: #4f7a5f; font-size: 1.2rem; }
+.mp-admin .mp-msg { padding: 24px 8px; color: #a0a0b0; }
+.mp-admin .mp-error { color: #ff8fa3; }

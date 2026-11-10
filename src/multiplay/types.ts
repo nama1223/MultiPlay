@@ -1,5 +1,5 @@
 export interface MpMarker {
-  time: number // 秒
+  time: number
   label: string
 }
 

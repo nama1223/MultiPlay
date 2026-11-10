@@ -1,0 +1,259 @@
+import { useEffect, useRef, useState } from 'react'
+import { Section, AppMode } from '../../types'
+import { SectionItem } from './SectionItem'
+import { downloadWithExcludes } from '../../utils/mp3Download'
+import { downloadCurrentMix, getCurrentManifest } from '../../multiplay/bridge'
+
+type FilterMode = 'all' | 'play' | 'exclude'
+type SortMode = 'registration' | 'startTime'
+
+interface Props {
+  sections: Section[]
+  mode: AppMode
+  duration: number
+  audioSrc: string
+  editAdjustValues: number[]
+  currentTime: number
+  activeSectionId: string | null
+  onPlay: (start: number, end: number) => void
+  onUpdate: (id: string, updates: Partial<Section>) => void
+  onDelete: (id: string) => void
+  onToggleExclude: (id: string) => void
+  onActivate: (id: string) => void
+  scrollTarget?: { id: string; seq: number } | null
+  hasWaveform?: boolean
+  fileName?: string
+  onAddSection: () => void
+  onUndo: () => void
+  onRedo: () => void
+  undoCount: number
+  redoCount: number
+  onReorder: (newOrder: Section[]) => void
+  onSectionNormalized?: () => void
+  onNormalizeAll?: () => void
+  normalizeAllActive?: boolean
+}
+
+const FILTER_LABELS: Record<FilterMode, string> = { all: '全区間', play: '再生区間', exclude: '除外区間' }
+const SORT_LABELS: Record<SortMode, string> = { registration: '登録順', startTime: '時間順' }
+const FILTER_CYCLE: FilterMode[] = ['all', 'play', 'exclude']
+const SORT_CYCLE: SortMode[] = ['registration', 'startTime']
+
+export function SectionList({
+  sections,
+  mode,
+  duration,
+  audioSrc,
+  editAdjustValues,
+  activeSectionId,
+  onPlay,
+  onUpdate,
+  onDelete,
+  onToggleExclude,
+  onActivate,
+  scrollTarget,
+  hasWaveform,
+  fileName,
+  onAddSection,
+  onUndo,
+  onRedo,
+  undoCount,
+  redoCount,
+  onReorder,
+  onSectionNormalized,
+  onNormalizeAll,
+  normalizeAllActive,
+}: Props) {
+  const [dlAll, setDlAll] = useState(false)
+  const [filter, setFilter] = useState<FilterMode>(() => mode === 'play' ? 'play' : 'all')
+  const [sortMode, setSortMode] = useState<SortMode>('registration')
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
+  const dragFromId = useRef<string | null>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+
+  // Scroll to the target section and auto-expand it
+  useEffect(() => {
+    if (!scrollTarget || !listRef.current) return
+    const listEl = listRef.current
+    const row = listEl.querySelector(`[data-section-id="${scrollTarget.id}"]`) as HTMLElement | null
+    if (!row) return
+    const header = listEl.querySelector('.section-list-header') as HTMLElement | null
+    const headerH = header?.clientHeight ?? 0
+    const listRect = listEl.getBoundingClientRect()
+    const rowRect = row.getBoundingClientRect()
+    listEl.scrollBy({ top: rowRect.top - listRect.top - headerH, behavior: 'smooth' })
+  }, [scrollTarget])
+
+  const cycleFilter = () => {
+    setFilter((f) => FILTER_CYCLE[(FILTER_CYCLE.indexOf(f) + 1) % FILTER_CYCLE.length])
+  }
+
+  const cycleSort = () => {
+    setSortMode((s) => SORT_CYCLE[(SORT_CYCLE.indexOf(s) + 1) % SORT_CYCLE.length])
+  }
+
+  const handleDownloadAll = async () => {
+    if (!audioSrc) return
+    setDlAll(true)
+    try {
+      if (getCurrentManifest()) {
+        // MultiPlay: 現在のトラックバランスで書き出す（除外区間は切り取って詰める）
+        const excludes = sections.filter(s => s.isExcluded).map(s => ({ start: s.startTime, end: s.endTime }))
+        await downloadCurrentMix(`${fileName ? fileName + '_' : ''}ミックス.wav`, excludes)
+      } else {
+        await downloadWithExcludes(audioSrc, sections, duration, `${fileName ? fileName + '_' : ''}録音_編集済み.mp3`)
+      }
+    } catch (e) {
+      alert(`ダウンロードに失敗しました: ${e}`)
+    } finally {
+      setDlAll(false)
+    }
+  }
+
+  // Filter then sort
+  let displayed = sections.filter((s) => {
+    if (filter === 'play') return !s.isExcluded
+    if (filter === 'exclude') return s.isExcluded
+    return true
+  })
+  if (sortMode === 'startTime') {
+    displayed = [...displayed].sort((a, b) => a.startTime - b.startTime)
+  }
+
+  const canDrag = sortMode === 'registration'
+
+  const handleDragStart = (id: string) => { dragFromId.current = id }
+
+  const handleDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault()
+    setDragOverId(id)
+  }
+
+  const handleDrop = (toId: string) => {
+    const fromId = dragFromId.current
+    dragFromId.current = null
+    setDragOverId(null)
+    if (!fromId || fromId === toId) return
+    const fromIdx = sections.findIndex((s) => s.id === fromId)
+    const toIdx = sections.findIndex((s) => s.id === toId)
+    if (fromIdx === -1 || toIdx === -1) return
+    const next = [...sections]
+    const [moved] = next.splice(fromIdx, 1)
+    next.splice(toIdx, 0, moved)
+    onReorder(next)
+  }
+
+  const handleDragEnd = () => { dragFromId.current = null; setDragOverId(null) }
+
+  return (
+    <div className="section-list" ref={listRef}>
+      <div className="section-list-header">
+        <span className="section-list-title">区間リスト</span>
+        <div className="section-list-toolbar">
+          <button
+            className={`sort-filter-btn${sortMode !== 'registration' ? ' active' : ''}`}
+            onClick={cycleSort}
+            title="ソート順を切り替え"
+          >
+            {SORT_LABELS[sortMode]}
+          </button>
+          <button
+            className={`sort-filter-btn${filter !== 'all' ? ' active' : ''}`}
+            onClick={cycleFilter}
+            title="表示フィルタを切り替え"
+          >
+            {FILTER_LABELS[filter]}
+          </button>
+        </div>
+        <div className="section-list-actions">
+          {mode === 'edit' && (
+            <button className="icon-btn" onClick={onAddSection} title="現在位置に区間を追加">＋</button>
+          )}
+          {/* Undo */}
+          <button
+            className="icon-btn badge-btn"
+            onClick={onUndo}
+            disabled={undoCount === 0}
+            title={`元に戻す (${undoCount})`}
+          >
+            ↩
+            {undoCount > 0 && <span className="icon-badge">{undoCount > 99 ? '99+' : undoCount}</span>}
+          </button>
+          {/* Redo */}
+          <button
+            className="icon-btn badge-btn"
+            onClick={onRedo}
+            disabled={redoCount === 0}
+            title={`やり直す (${redoCount})`}
+          >
+            ↪
+            {redoCount > 0 && <span className="icon-badge">{redoCount > 99 ? '99+' : redoCount}</span>}
+          </button>
+        </div>
+      </div>
+
+      {displayed.length === 0 ? (
+        <p className="no-sections">
+          {sections.length === 0
+            ? (mode === 'edit' ? '＋ボタンで区間を追加できます' : '区間が設定されていません')
+            : 'フィルタ条件に一致する区間がありません'}
+        </p>
+      ) : (
+        displayed.map((s) => (
+          <div
+            key={s.id}
+            data-section-id={s.id}
+            className={`section-drag-row${dragOverId === s.id ? ' drag-over' : ''}`}
+            draggable={canDrag}
+            onDragStart={() => handleDragStart(s.id)}
+            onDragOver={(e) => handleDragOver(e, s.id)}
+            onDrop={() => handleDrop(s.id)}
+            onDragEnd={handleDragEnd}
+          >
+            {canDrag && <span className="drag-handle" title="ドラッグで並べ替え">⠿</span>}
+            <SectionItem
+              section={s}
+              mode={mode}
+              duration={duration}
+              audioSrc={audioSrc}
+              editAdjustValues={editAdjustValues}
+              isActive={activeSectionId === s.id}
+              scrollTarget={scrollTarget}
+              hasWaveform={hasWaveform}
+              fileName={fileName}
+              onPlay={onPlay}
+              onUpdate={onUpdate}
+              onDelete={onDelete}
+              onToggleExclude={onToggleExclude}
+              onActivate={onActivate}
+              onNormalized={onSectionNormalized}
+            />
+          </div>
+        ))
+      )}
+
+      {mode === 'play' && audioSrc && (
+        <button className="download-all-btn" onClick={handleDownloadAll} disabled={dlAll}>
+          {dlAll
+            ? 'ダウンロード中...'
+            : sections.some((s) => s.isExcluded)
+              ? '⬇ 除外区間を除いた全体をDL'
+              : '⬇ 全体をダウンロード'}
+        </button>
+      )}
+
+      {mode === 'edit' && hasWaveform && onNormalizeAll && (
+        <button
+          className="normalize-all-btn"
+          onClick={onNormalizeAll}
+          disabled={normalizeAllActive}
+          title="全ての再生区間のピークを個別に検出し、1回のエンコードでまとめてノーマライズします"
+        >
+          {normalizeAllActive
+            ? '🔊 全区間ノーマライズ中...'
+            : '🔊 全ての再生区間をまとめてノーマライズ'}
+        </button>
+      )}
+    </div>
+  )
+}

@@ -94,6 +94,7 @@ export class MultiTrackEngine {
   tracks: LoadedTrack[] = []
   duration = 0
   playing = false
+  rate = 1
   onEnded: (() => void) | null = null
   private startedAtCtx = 0
   private startPos = 0
@@ -163,7 +164,47 @@ export class MultiTrackEngine {
   position(): number {
     if (!this.ctx) return this.pausedPos
     if (!this.playing) return this.pausedPos
-    return Math.min(this.duration, this.startPos + (this.ctx.currentTime - this.startedAtCtx))
+    return Math.min(this.duration, this.startPos + (this.ctx.currentTime - this.startedAtCtx) * this.rate)
+  }
+
+  /** 再生速度を変更する（バッファ再生のためピッチも変わる） */
+  setRate(r: number) {
+    const clamped = Math.max(0.5, Math.min(2, r))
+    if (this.playing && this.ctx) {
+      this.startPos = this.position()
+      this.startedAtCtx = this.ctx.currentTime
+      for (const s of this.sources) {
+        try { s.playbackRate.value = clamped } catch { /* noop */ }
+      }
+      if (this.endTimer) {
+        clearTimeout(this.endTimer)
+        const remain = this.duration - this.startPos
+        this.endTimer = setTimeout(() => {
+          this.playing = false
+          this.pausedPos = this.duration
+          this.onEnded?.()
+        }, (remain / clamped) * 1000 + 120)
+      }
+    }
+    this.rate = clamped
+  }
+
+  /** 全トラックを重ねた波形ピーク（表示用） */
+  mixPeaks(buckets = 1200): Float32Array {
+    const out = new Float32Array(buckets)
+    if (this.duration <= 0) return out
+    for (let b = 0; b < buckets; b++) {
+      const t = (b / buckets) * this.duration
+      let max = 0
+      for (const tr of this.tracks) {
+        const off = (tr.def.offsetMs ?? 0) / 1000
+        if (t < off || t > off + tr.buffer.duration) continue
+        const idx = Math.min(tr.peaks.length - 1, Math.floor(((t - off) / tr.buffer.duration) * tr.peaks.length))
+        if (tr.peaks[idx] > max) max = tr.peaks[idx]
+      }
+      out[b] = max
+    }
+    return out
   }
 
   play(fromSec?: number) {
@@ -178,8 +219,9 @@ export class MultiTrackEngine {
       src.buffer = t.buffer
       src.connect(t.gainNode)
       if (pos >= offsetSec + t.buffer.duration) continue
+      src.playbackRate.value = this.rate
       if (pos >= offsetSec) src.start(when, pos - offsetSec)
-      else src.start(when + (offsetSec - pos))
+      else src.start(when + (offsetSec - pos) / this.rate)
       this.sources.push(src)
     }
     this.startedAtCtx = when
@@ -192,7 +234,7 @@ export class MultiTrackEngine {
         this.playing = false
         this.pausedPos = this.duration
         this.onEnded?.()
-      }, remain * 1000 + 120)
+      }, (remain / this.rate) * 1000 + 120)
     }
   }
 
@@ -237,10 +279,21 @@ export class MultiTrackEngine {
     }
   }
 
-  /** 現在のバランス・オフセット・リバーブでオフライン書き出しして WAV を返す */
-  async renderMixdown(mix: Record<string, MixState>): Promise<Blob> {
+  /** 現在のバランス・オフセット・リバーブでオフライン書き出しして WAV を返す。除外区間は切り取って詰める */
+  async renderMixdown(mix: Record<string, MixState>, excludes: { start: number; end: number }[] = []): Promise<Blob> {
     const rate = 44100
-    const length = Math.ceil(this.duration * rate) + Math.floor(rate * 0.2)
+    // 残す区間（除外の補集合）
+    const sorted = [...excludes].sort((a, b) => a.start - b.start)
+    const kept: { start: number; end: number }[] = []
+    let cursor = 0
+    for (const z of sorted) {
+      if (z.start > cursor) kept.push({ start: cursor, end: Math.min(z.start, this.duration) })
+      cursor = Math.max(cursor, z.end)
+    }
+    if (cursor < this.duration) kept.push({ start: cursor, end: this.duration })
+    const keptTotal = kept.reduce((s, k) => s + (k.end - k.start), 0)
+
+    const length = Math.ceil(keptTotal * rate) + Math.floor(rate * 0.2)
     const off = new OfflineAudioContext(2, length, rate)
     const bus = off.createGain()
     const dry = off.createGain()
@@ -256,16 +309,26 @@ export class MultiTrackEngine {
       convolver.connect(wet)
       wet.connect(off.destination)
     }
-    for (const t of this.tracks) {
-      const g = this.effectiveGain(t.def.id, mix)
-      if (g <= 0) continue
-      const src = off.createBufferSource()
-      src.buffer = t.buffer
-      const gn = off.createGain()
-      gn.gain.value = g
-      src.connect(gn)
-      gn.connect(bus)
-      src.start((t.def.offsetMs ?? 0) / 1000)
+    let dest = 0
+    for (const seg of kept) {
+      for (const t of this.tracks) {
+        const g = this.effectiveGain(t.def.id, mix)
+        if (g <= 0) continue
+        const offSec = (t.def.offsetMs ?? 0) / 1000
+        const localStart = Math.max(0, seg.start - offSec)
+        const localEnd = Math.min(t.buffer.duration, seg.end - offSec)
+        if (localEnd <= localStart) continue
+        const src = off.createBufferSource()
+        src.buffer = t.buffer
+        const gn = off.createGain()
+        gn.gain.value = g
+        src.connect(gn)
+        gn.connect(bus)
+        const when = dest + Math.max(0, offSec - seg.start)
+        src.start(when, localStart)
+        src.stop(when + (localEnd - localStart))
+      }
+      dest += seg.end - seg.start
     }
     const rendered = await off.startRendering()
     return encodeWav(rendered)

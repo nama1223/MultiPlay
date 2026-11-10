@@ -1,5 +1,5 @@
 import { API_BASE, FIXTURES, indexUrl, songUrl } from '../config'
-import type { MpIndex, MpSongManifest } from '../types-multiplay'
+import type { MpIndex, MpSongManifest } from '../multiplay/types'
 
 const TOKEN_KEY = 'mp_admin_token'
 

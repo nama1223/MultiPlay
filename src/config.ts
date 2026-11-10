@@ -16,3 +16,14 @@ export function resolveTrackUrl(url: string): string {
   if (FIXTURES) return url
   return `${API_BASE}${url.startsWith('/') ? '' : '/'}${url}`
 }
+
+/** 互換用（RecPlay 由来の一部ユーティリティが参照する。MultiPlay では実質未使用） */
+export const MP3_BITRATE = 192
+export const WORKER_URL = API_BASE
+
+/** 曲の共有URL（?song= 形式） */
+export function buildAppShareUrl(songId: string): string {
+  const origin = window.location.origin
+  const path = window.location.pathname.replace(/\/?$/, '/')
+  return `${origin}${path}?song=${encodeURIComponent(songId)}`
+}

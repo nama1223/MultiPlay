@@ -3,12 +3,12 @@ import {
   getAdminToken, setAdminToken, clearAdminToken, checkToken,
   fetchIndexFresh, fetchSongFresh, uploadAudio, deleteAudioByUrl,
   saveSongManifest, saveIndex,
-} from '../admin/api'
-import type { MpIndex, MpSongManifest } from '../types-multiplay'
+} from '../multiplay/api'
+import type { MpIndex, MpSongManifest } from '../multiplay/types'
 
 const newId = (p: string) => `${p}${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`
 
-export function AdminPage({ onBack }: { onBack: () => void }) {
+export function AdminPage({ onLogout }: { onLogout: () => void }) {
   const [authed, setAuthed] = useState(!!getAdminToken())
   const [pass, setPass] = useState('')
   const [index, setIndex] = useState<MpIndex | null>(null)
@@ -43,7 +43,7 @@ export function AdminPage({ onBack }: { onBack: () => void }) {
 
   if (!authed) return (
     <div className="mp-admin">
-      <button className="mp-back" onClick={onBack}>‹ 曲一覧へ</button>
+      <button className="mp-back" onClick={onLogout}>‹ 曲一覧へ</button>
       <h2 className="mp-title">管理画面</h2>
       <p className="mp-subtitle">管理用の合言葉を入れてください（この端末のタブを閉じるまで保持されます）</p>
       <div className="mp-admin-row">
@@ -130,7 +130,7 @@ export function AdminPage({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="mp-admin">
-      <button className="mp-back" onClick={onBack}>‹ 曲一覧へ</button>
+      <button className="mp-back" onClick={onLogout}>‹ 曲一覧へ</button>
       <h2 className="mp-title">管理画面</h2>
       {msg && <p className="mp-admin-msg">{msg}</p>}
       {!index && <p className="mp-msg">読み込み中…</p>}

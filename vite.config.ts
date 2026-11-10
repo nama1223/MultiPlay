@@ -16,7 +16,7 @@ export default defineConfig({
       manifest: {
         name: 'MultiPlay',
         short_name: 'MultiPlay',
-        description: '多重録音の練習プレーヤー',
+        description: 'パート別に聴ける、多重録音プレーヤー',
         theme_color: '#1e1253',
         background_color: '#1e1253',
         display: 'standalone',
