@@ -32,6 +32,8 @@ interface Props {
   onSectionNormalized?: () => void
   onNormalizeAll?: () => void
   normalizeAllActive?: boolean
+  /** マーカー（開始点だけ）として表示・編集する */
+  markerMode?: boolean
 }
 
 const FILTER_LABELS: Record<FilterMode, string> = { all: '全区間', play: '再生区間', exclude: '除外区間' }
@@ -63,6 +65,7 @@ export function SectionList({
   onSectionNormalized,
   onNormalizeAll,
   normalizeAllActive,
+  markerMode,
 }: Props) {
   const [dlAll, setDlAll] = useState(false)
   const [filter, setFilter] = useState<FilterMode>(() => mode === 'play' ? 'play' : 'all')
@@ -227,6 +230,7 @@ export function SectionList({
               onToggleExclude={onToggleExclude}
               onActivate={onActivate}
               onNormalized={onSectionNormalized}
+              markerMode={markerMode}
             />
           </div>
         ))

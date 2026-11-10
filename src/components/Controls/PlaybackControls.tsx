@@ -15,6 +15,8 @@ interface Props {
   activeSectionId: string | null
   onMarkStart: () => void
   onMarkEnd: () => void
+  /** マーカー（開始点だけ）の時は終了ボタンと文言を切り替える */
+  markerMode?: boolean
 }
 
 export function PlaybackControls({
@@ -31,6 +33,7 @@ export function PlaybackControls({
   activeSectionId,
   onMarkStart,
   onMarkEnd,
+  markerMode,
 }: Props) {
   const negatives = skipValues.filter((v) => v < 0).sort((a, b) => a - b)
   const positives = skipValues.filter((v) => v > 0).sort((a, b) => a - b)
@@ -153,11 +156,13 @@ export function PlaybackControls({
           {activeSectionId ? (
             <>
               <button className="mark-btn mark-start" onClick={onMarkStart}>
-                ◀ ここから開始
+                {markerMode ? '◀ マーカーをここへ' : '◀ ここから開始'}
               </button>
+              {!markerMode && (
               <button className="mark-btn mark-end" onClick={onMarkEnd}>
                 ここで終了 ▶
               </button>
+              )}
             </>
           ) : (
             <span className="mark-hint">区間リストの区間を選択すると位置を設定できます</span>

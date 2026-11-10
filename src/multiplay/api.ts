@@ -4,13 +4,13 @@ import type { MpIndex, MpSongManifest } from '../multiplay/types'
 const TOKEN_KEY = 'mp_admin_token'
 
 export function getAdminToken(): string {
-  return sessionStorage.getItem(TOKEN_KEY) ?? ''
+  return localStorage.getItem(TOKEN_KEY) ?? ''
 }
 export function setAdminToken(token: string) {
-  sessionStorage.setItem(TOKEN_KEY, token)
+  localStorage.setItem(TOKEN_KEY, token)
 }
 export function clearAdminToken() {
-  sessionStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem(TOKEN_KEY)
 }
 
 function adminHeaders(extra: Record<string, string> = {}): Record<string, string> {

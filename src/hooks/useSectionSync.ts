@@ -35,7 +35,7 @@ export function manifestWithSections(m: MpSongManifest, sections: Section[]): Mp
 }
 
 function adminToken(): string {
-  return sessionStorage.getItem('mp_admin_token') ?? ''
+  return localStorage.getItem('mp_admin_token') ?? ''
 }
 
 /**

@@ -4,6 +4,7 @@ import { formatTime } from '../../utils/timeFormat'
 import { FlagEditor } from './FlagEditor'
 import { downloadClip } from '../../utils/mp3Download'
 import { normalizeSection, NormPhase } from '../../utils/normalize'
+import { downloadCurrentMix, getCurrentManifest } from '../../multiplay/bridge'
 
 interface Props {
   section: Section
@@ -21,6 +22,8 @@ interface Props {
   onToggleExclude: (id: string) => void
   onActivate: (id: string) => void
   onNormalized?: () => void
+  /** マーカー（開始点だけ）として表示・編集する */
+  markerMode?: boolean
 }
 
 export function SectionItem({
@@ -39,6 +42,7 @@ export function SectionItem({
   onToggleExclude,
   onActivate,
   onNormalized,
+  markerMode,
 }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [downloading, setDownloading] = useState(false)
@@ -78,7 +82,15 @@ export function SectionItem({
     if (!audioSrc) return
     setDownloading(true)
     try {
-      await downloadClip(audioSrc, section.startTime, section.endTime, duration, `${fileName ? fileName + '_' : ''}${section.label}.mp3`)
+      if (getCurrentManifest()) {
+        // MultiPlay: この区間だけを現在バランスで書き出す
+        await downloadCurrentMix(`${fileName ? fileName + '_' : ''}${section.label}.wav`, [
+          { start: 0, end: section.startTime },
+          { start: section.endTime, end: duration },
+        ])
+      } else {
+        await downloadClip(audioSrc, section.startTime, section.endTime, duration, `${fileName ? fileName + '_' : ''}${section.label}.mp3`)
+      }
     } catch (e) {
       alert(`ダウンロードに失敗しました: ${e}`)
     } finally {
@@ -144,7 +156,7 @@ export function SectionItem({
         </div>
         <div className="section-item-expand">
           <span className="section-time">
-            {formatTime(section.startTime)} – {formatTime(section.endTime)}
+            {markerMode ? formatTime(section.startTime) : `${formatTime(section.startTime)} – ${formatTime(section.endTime)}`}
           </span>
           <span className="expand-icon">{expanded ? '▲' : '▼'}</span>
         </div>
@@ -181,6 +193,7 @@ export function SectionItem({
                 onUpdate={onUpdate}
                 onClose={() => setExpanded(false)}
                 onPlay={onPlay}
+                markerMode={markerMode}
               />
               {hasWaveform && !section.isExcluded && (
                 <button

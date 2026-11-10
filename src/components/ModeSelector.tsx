@@ -3,12 +3,15 @@ import { AppMode } from '../types'
 interface Props {
   mode: AppMode
   onChange: (mode: AppMode) => void
+  /** 管理者の時だけ「編集」を出す */
+  showEdit?: boolean
 }
 
-export function ModeSelector({ mode, onChange }: Props) {
+export function ModeSelector({ mode, onChange, showEdit = true }: Props) {
+  const modes = (['play', 'edit', 'settings'] as AppMode[]).filter(m => m !== 'edit' || showEdit)
   return (
     <div className="mode-selector">
-      {(['play', 'edit', 'settings'] as AppMode[]).map((m) => (
+      {modes.map((m) => (
         <button
           key={m}
           className={`mode-btn ${mode === m ? 'active' : ''}`}

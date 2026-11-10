@@ -45,7 +45,7 @@ export function AdminPage({ onLogout }: { onLogout: () => void }) {
     <div className="mp-admin">
       <button className="mp-back" onClick={onLogout}>‹ 曲一覧へ</button>
       <h2 className="mp-title">管理画面</h2>
-      <p className="mp-subtitle">管理用の合言葉を入れてください（この端末のタブを閉じるまで保持されます）</p>
+      <p className="mp-subtitle">管理用の合言葉を入れてください（この端末に保存され、次回から自動で管理者になります）</p>
       <div className="mp-admin-row">
         <input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="合言葉" className="mp-input" autoComplete="off" />
         <button className="mp-btn" disabled={busy || !pass} onClick={tryLogin}>入る</button>
@@ -132,6 +132,10 @@ export function AdminPage({ onLogout }: { onLogout: () => void }) {
     <div className="mp-admin">
       <button className="mp-back" onClick={onLogout}>‹ 曲一覧へ</button>
       <h2 className="mp-title">管理画面</h2>
+      <div className="mp-admin-row">
+        <span className="mp-subtitle">管理者としてログイン中</span>
+        <button className="mp-btn sub" onClick={() => { clearAdminToken(); setAuthed(false); setPass('') }}>管理者をログアウト</button>
+      </div>
       {msg && <p className="mp-admin-msg">{msg}</p>}
       {!index && <p className="mp-msg">読み込み中…</p>}
       {index && !song && (
@@ -198,19 +202,7 @@ export function AdminPage({ onLogout }: { onLogout: () => void }) {
             <button className="mp-btn" disabled={busy} onClick={() => { const f = fileRef.current?.files?.[0]; if (f) addTrackFile(f) }}>トラックを追加（アップロード）</button>
           </div>
 
-          <h3 className="mp-admin-h">練習マーカー</h3>
-          {song.markers.map((mk, i) => (
-            <div key={i} className="mp-admin-track">
-              <input value={mk.label} onChange={e => setSong({ ...song, markers: song.markers.map((x, j) => j === i ? { ...x, label: e.target.value } : x) })} className="mp-input grow" aria-label="マーカー名" />
-              <label className="mp-num">時刻(秒)
-                <input type="number" step={0.1} min={0} value={mk.time} onChange={e => setSong({ ...song, markers: song.markers.map((x, j) => j === i ? { ...x, time: Number(e.target.value) } : x) })} className="mp-input small" />
-              </label>
-              <button className="mp-btn danger" onClick={() => setSong({ ...song, markers: song.markers.filter((_, j) => j !== i) })}>削除</button>
-            </div>
-          ))}
-          <div className="mp-admin-row">
-            <button className="mp-btn sub" onClick={() => setSong({ ...song, markers: [...song.markers, { time: 0, label: '練習' }].sort((a, b) => a.time - b.time) })}>マーカーを追加</button>
-          </div>
+          <p className="mp-subtitle">練習マーカーは、プレイヤー画面の「編集」モードで設定します。</p>
 
           <div className="mp-admin-row sticky">
             <button className="mp-btn primary" disabled={busy} onClick={saveSong}>保存する</button>

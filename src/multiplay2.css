@@ -12,6 +12,16 @@
 .track-vol { flex: 1; accent-color: #16a34a; }
 .track-vol-val { font-size: 11px; color: #82b294; width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; }
 
+/* トラック別シークバー */
+.tseek-body { position: relative; touch-action: none; }
+.tseek-stripbands { position: absolute; top: 0; right: 0; }
+.tseek-band { position: absolute; top: 0; height: 100%; overflow: hidden; cursor: grab; }
+.tseek-bandlabel { background: none; border: none; font-size: 11px; font-weight: 700; padding: 2px 4px; cursor: pointer; white-space: nowrap; }
+.tseek-lanelabel { position: absolute; left: 0; display: flex; align-items: center; padding: 0 6px; font-size: 11px; color: #82b294; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.tseek-canvascol { position: absolute; right: 0; left: 0; }
+.tseek-canvas { display: block; width: 100%; background: rgba(255,255,255,0.03); border-bottom: 1px solid #1b3327; }
+.tseek-playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: #63e6a4; box-shadow: 0 0 6px #63e6a4; pointer-events: none; transform: translateX(-1px); z-index: 5; }
+
 /* 管理画面（v1 の mp- クラスを RecPlay 緑系に合わせて移植） */
 .mp-admin { padding: 10px 12px 48px; max-width: 720px; margin: 0 auto; }
 .mp-back { font-size: 13px; padding: 6px 12px; background: linear-gradient(135deg, #14532d, #1d7a44); color: #a9f0c5; border: 1px solid #2a5a44; border-radius: 8px; cursor: pointer; }

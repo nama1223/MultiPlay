@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAudioPlayer } from './hooks/useAudioPlayer'
 import { useSections } from './hooks/useSections'
-import { useSeekBar } from './hooks/useSeekBar'
 import { useSettings } from './hooks/useSettings'
 import { useWaveform } from './hooks/useWaveform'
 import { useSectionSync } from './hooks/useSectionSync'
 import { OrgInfo, getStoredOrgs, storeOrg } from './hooks/useOrgAuth'
-import { SeekBar } from './components/SeekBar/SeekBar'
+import { TrackSeekBar } from './components/SeekBar/TrackSeekBar'
 import { PlaybackControls } from './components/Controls/PlaybackControls'
 import { SectionList } from './components/Sections/SectionList'
 import { ModeSelector } from './components/ModeSelector'
@@ -16,7 +15,7 @@ import { FileListPage } from './components/FileListPage'
 import { AdminPage } from './components/AdminPage'
 import { TrackMixer } from './components/TrackMixer'
 import { formatTime } from './utils/timeFormat'
-import { AppMode, Section, ZOOM_LEVELS } from './types'
+import { AppMode, Section } from './types'
 import { buildAppShareUrl, indexUrl } from './config'
 import type { MpIndex } from './multiplay/types'
 import './App.css'
@@ -65,9 +64,16 @@ export default function App() {
   } = useAudioPlayer()
 
   const { sections, addSection, updateSection, deleteSection, toggleExclude, importSections, reorderSections, undo, redo, undoCount, redoCount } = useSections()
-  const { zoomIndex, zoomIn, zoomOut, secondsPerRow, numRows, initZoom } = useSeekBar(duration)
   const { settings, updateSettings } = useSettings()
-  const { samples: waveformSamples, hasStored: waveformStored, peakLevel: waveformPeakLevel } = useWaveform(src, duration, fileKey)
+  // 管理者ログイン（localStorage に保存）があれば「編集」モードを解放する
+  const [isAdmin, setIsAdmin] = useState(() => !!localStorage.getItem('mp_admin_token'))
+  useEffect(() => {
+    setIsAdmin(!!localStorage.getItem('mp_admin_token'))
+  }, [screen])
+  useEffect(() => {
+    if (!isAdmin && mode === 'edit') setMode('play')
+  }, [isAdmin, mode])
+  const { hasStored: waveformStored, peakLevel: waveformPeakLevel } = useWaveform(src, duration, fileKey)
   const [waveMenuOpen, setWaveMenuOpen] = useState(false)
   const waveMenuRef = useRef<HTMLDivElement>(null)
   const onRemoteUpdate = useCallback((secs: Section[]) => importSections(secs), [importSections])
@@ -113,10 +119,6 @@ export default function App() {
       .catch(() => { /* リンク解決に失敗したら通常の入口のまま */ })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    if (duration > 0) initZoom(duration)
-  }, [duration, initZoom])
-
   // ── Space キーで再生/停止 ────────────────────────────────────────────────
   const togglePlayPauseRef = useRef(togglePlayPause)
   useEffect(() => { togglePlayPauseRef.current = togglePlayPause }, [togglePlayPause])
@@ -158,6 +160,14 @@ export default function App() {
     setScrollTarget((prev) => ({ id, seq: (prev?.seq ?? 0) + 1 }))
   }
 
+  // マーカー再生: 終了位置は「次のマーカー（なければ曲末）」を常に正とする
+  const playMarker = useCallback((startTime: number, _endTime: number) => {
+    const sorted = [...sections].sort((a, b) => a.startTime - b.startTime)
+    const idx = sorted.findIndex(s => Math.abs(s.startTime - startTime) < 0.01)
+    const end = idx >= 0 && idx + 1 < sorted.length ? sorted[idx + 1].startTime : duration
+    playSection(startTime, end)
+  }, [sections, duration, playSection])
+
   const handleAddSection = () => {
     const start = currentTime
     const end = Math.min(currentTime + 30, duration || currentTime + 30)
@@ -192,7 +202,7 @@ export default function App() {
   }, [waveMenuOpen])
 
   const handleLogout = () => {
-    sessionStorage.removeItem('mp_admin_token')
+    // 団体から戻るだけ。管理者ログイン（localStorage）は保持する
     setOrg(null)
     setScreen('auth')
     setFileLoaded(false)
@@ -253,7 +263,7 @@ export default function App() {
                 : 'MultiPlay'
               }
             </span>
-            <ModeSelector mode={mode} onChange={setMode} />
+            <ModeSelector mode={mode} onChange={setMode} showEdit={isAdmin} />
           </header>
 
           {fileLoaded && (
@@ -275,20 +285,11 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="zoom-row">
-                <button className="zoom-btn-sm" onClick={zoomOut} disabled={zoomIndex === ZOOM_LEVELS.length - 1} title="ズームアウト">−</button>
-                <span className="zoom-label-sm">{secondsPerRow >= 60 ? `${secondsPerRow / 60}分/段` : `${secondsPerRow}秒/段`}</span>
-                <button className="zoom-btn-sm" onClick={zoomIn} disabled={zoomIndex === 0} title="ズームイン">＋</button>
-              </div>
-
-              <SeekBar
+              <TrackSeekBar
                 currentTime={currentTime}
                 duration={duration}
-                secondsPerRow={secondsPerRow}
-                numRows={numRows}
                 sections={sections}
                 mode={mode}
-                waveformSamples={waveformSamples}
                 activeSectionId={activeSectionId}
                 onSeek={seek}
                 onSectionUpdate={updateSection}
@@ -310,6 +311,7 @@ export default function App() {
                   activeSectionId={activeSectionId}
                   onMarkStart={handleMarkStart}
                   onMarkEnd={handleMarkEnd}
+                  markerMode
                 />
               )}
 
@@ -326,7 +328,7 @@ export default function App() {
                   editAdjustValues={settings.editAdjustValues}
                   currentTime={currentTime}
                   activeSectionId={activeSectionId}
-                  onPlay={playSection}
+                  onPlay={playMarker}
                   onUpdate={updateSection}
                   onDelete={deleteSection}
                   onToggleExclude={toggleExclude}
@@ -343,6 +345,7 @@ export default function App() {
                   onSectionNormalized={() => { /* MultiPlay では未対応 */ }}
                   onNormalizeAll={undefined}
                   normalizeAllActive={false}
+                  markerMode
                 />
               )}
 
