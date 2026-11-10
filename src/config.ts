@@ -1,0 +1,18 @@
+/** MultiPlay API の接続先。フィクスチャモードでは同一オリジンの /fixtures を使う。 */
+export const FIXTURES = (import.meta.env.VITE_MP_FIXTURES as string) === '1'
+export const API_BASE = FIXTURES ? '' : ((import.meta.env.VITE_MP_API_BASE as string) ?? 'https://api.nama1223.com')
+
+export function indexUrl(): string {
+  return FIXTURES ? '/fixtures/api/index.json' : `${API_BASE}/api/index`
+}
+
+export function songUrl(id: string): string {
+  return FIXTURES ? `/fixtures/api/songs/${id}/manifest.json` : `${API_BASE}/api/song/${id}`
+}
+
+/** manifest 内のトラック URL を実 URL に解決する */
+export function resolveTrackUrl(url: string): string {
+  if (/^https?:\/\//.test(url)) return url
+  if (FIXTURES) return url
+  return `${API_BASE}${url.startsWith('/') ? '' : '/'}${url}`
+}
