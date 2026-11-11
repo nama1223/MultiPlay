@@ -2,8 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { Section, AppMode } from '../../types'
 import { formatTime } from '../../utils/timeFormat'
 import { FlagEditor } from './FlagEditor'
-import { downloadClip } from '../../utils/mp3Download'
-import { normalizeSection, NormPhase } from '../../utils/normalize'
 import { downloadCurrentMix, getCurrentManifest } from '../../multiplay/bridge'
 
 interface Props {
@@ -14,14 +12,12 @@ interface Props {
   editAdjustValues: number[]
   isActive: boolean
   scrollTarget?: { id: string; seq: number } | null
-  hasWaveform?: boolean
   fileName?: string
   onPlay: (start: number, end: number) => void
   onUpdate: (id: string, updates: Partial<Section>) => void
   onDelete: (id: string) => void
   onToggleExclude: (id: string) => void
   onActivate: (id: string) => void
-  onNormalized?: () => void
   /** マーカー（開始点だけ）として表示・編集する */
   markerMode?: boolean
 }
@@ -34,21 +30,16 @@ export function SectionItem({
   editAdjustValues,
   isActive,
   scrollTarget,
-  hasWaveform,
   fileName,
   onPlay,
   onUpdate,
   onDelete,
   onToggleExclude,
   onActivate,
-  onNormalized,
   markerMode,
 }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [downloading, setDownloading] = useState(false)
-  const [normalizing, setNormalizing] = useState(false)
-  const [normPct, setNormPct] = useState(0)
-  const [normPhase, setNormPhase] = useState<NormPhase>('scan')
   const lastSeqRef = useRef<number>(-1)
 
   // Auto-expand when this section is the scroll target
@@ -79,49 +70,18 @@ export function SectionItem({
   }
 
   const handleDownload = async () => {
-    if (!audioSrc) return
+    if (!audioSrc || !getCurrentManifest()) return
     setDownloading(true)
     try {
-      if (getCurrentManifest()) {
-        // MultiPlay: この区間だけを現在バランスで書き出す
-        await downloadCurrentMix(`${fileName ? fileName + '_' : ''}${section.label}.wav`, [
-          { start: 0, end: section.startTime },
-          { start: section.endTime, end: duration },
-        ])
-      } else {
-        await downloadClip(audioSrc, section.startTime, section.endTime, duration, `${fileName ? fileName + '_' : ''}${section.label}.mp3`)
-      }
+      // この区間だけを現在バランスで書き出す
+      await downloadCurrentMix(`${fileName ? fileName + '_' : ''}${section.label}.wav`, [
+        { start: 0, end: section.startTime },
+        { start: section.endTime, end: duration },
+      ])
     } catch (e) {
       alert(`ダウンロードに失敗しました: ${e}`)
     } finally {
       setDownloading(false)
-    }
-  }
-
-  const handleNormalizeSection = async () => {
-    if (!audioSrc || normalizing) return
-    // Extract fileKey from Worker audio URL
-    let fileKey: string | null = null
-    try {
-      fileKey = new URL(audioSrc).searchParams.get('key')
-    } catch { /* local file, no key */ }
-    if (!fileKey) return
-
-    setNormalizing(true)
-    setNormPct(0)
-    try {
-      await normalizeSection(
-        audioSrc,
-        section.startTime, section.endTime,
-        duration,
-        fileKey,
-        (pct, phase) => { setNormPct(pct); setNormPhase(phase) },
-      )
-      onNormalized?.()  // updates peakLevel + reloads audio in App
-    } catch (e) {
-      alert(`ノーマライズに失敗しました: ${e}`)
-    } finally {
-      setNormalizing(false)
     }
   }
 
@@ -195,17 +155,6 @@ export function SectionItem({
                 onPlay={onPlay}
                 markerMode={markerMode}
               />
-              {hasWaveform && !section.isExcluded && (
-                <button
-                  className="action-btn normalize"
-                  onClick={handleNormalizeSection}
-                  disabled={normalizing}
-                >
-                  {normalizing
-                    ? `${normPhase === 'scan' ? 'ピーク検出' : normPhase === 'upload' ? 'アップロード' : 'エンコード'}中... ${normPct}%`
-                    : '🔊 区間内の音量最大化（ノーマライズ）'}
-                </button>
-              )}
               <button
                 className="action-btn delete compact"
                 onClick={() => { if (confirm(`「${section.label}」を削除しますか？`)) onDelete(section.id) }}

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAudioPlayer } from './hooks/useAudioPlayer'
 import { useSections } from './hooks/useSections'
 import { useSettings } from './hooks/useSettings'
-import { useWaveform } from './hooks/useWaveform'
 import { useSectionSync } from './hooks/useSectionSync'
 import { OrgInfo, getStoredOrgs, storeOrg } from './hooks/useOrgAuth'
 import { TrackSeekBar } from './components/SeekBar/TrackSeekBar'
@@ -73,7 +72,6 @@ export default function App() {
   useEffect(() => {
     if (!isAdmin && mode === 'edit') setMode('play')
   }, [isAdmin, mode])
-  const { hasStored: waveformStored, peakLevel: waveformPeakLevel } = useWaveform(src, duration, fileKey)
   const [waveMenuOpen, setWaveMenuOpen] = useState(false)
   const waveMenuRef = useRef<HTMLDivElement>(null)
   const onRemoteUpdate = useCallback((secs: Section[]) => importSections(secs), [importSections])
@@ -334,7 +332,6 @@ export default function App() {
                   onToggleExclude={toggleExclude}
                   onActivate={setActiveSectionId}
                   scrollTarget={scrollTarget}
-                  hasWaveform={waveformStored && !!waveformPeakLevel}
                   fileName={fileName}
                   onAddSection={handleAddSection}
                   onUndo={undo}
@@ -342,9 +339,6 @@ export default function App() {
                   undoCount={undoCount}
                   redoCount={redoCount}
                   onReorder={reorderSections}
-                  onSectionNormalized={() => { /* MultiPlay では未対応 */ }}
-                  onNormalizeAll={undefined}
-                  normalizeAllActive={false}
                   markerMode
                 />
               )}

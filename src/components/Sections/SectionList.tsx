@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Section, AppMode } from '../../types'
 import { SectionItem } from './SectionItem'
-import { downloadWithExcludes } from '../../utils/mp3Download'
 import { downloadCurrentMix, getCurrentManifest } from '../../multiplay/bridge'
 
 type FilterMode = 'all' | 'play' | 'exclude'
@@ -21,7 +20,6 @@ interface Props {
   onToggleExclude: (id: string) => void
   onActivate: (id: string) => void
   scrollTarget?: { id: string; seq: number } | null
-  hasWaveform?: boolean
   fileName?: string
   onAddSection: () => void
   onUndo: () => void
@@ -29,9 +27,6 @@ interface Props {
   undoCount: number
   redoCount: number
   onReorder: (newOrder: Section[]) => void
-  onSectionNormalized?: () => void
-  onNormalizeAll?: () => void
-  normalizeAllActive?: boolean
   /** マーカー（開始点だけ）として表示・編集する */
   markerMode?: boolean
 }
@@ -54,7 +49,6 @@ export function SectionList({
   onToggleExclude,
   onActivate,
   scrollTarget,
-  hasWaveform,
   fileName,
   onAddSection,
   onUndo,
@@ -62,9 +56,6 @@ export function SectionList({
   undoCount,
   redoCount,
   onReorder,
-  onSectionNormalized,
-  onNormalizeAll,
-  normalizeAllActive,
   markerMode,
 }: Props) {
   const [dlAll, setDlAll] = useState(false)
@@ -100,11 +91,9 @@ export function SectionList({
     setDlAll(true)
     try {
       if (getCurrentManifest()) {
-        // MultiPlay: 現在のトラックバランスで書き出す（除外区間は切り取って詰める）
+        // 現在のトラックバランスで書き出す（除外区間は切り取って詰める）
         const excludes = sections.filter(s => s.isExcluded).map(s => ({ start: s.startTime, end: s.endTime }))
         await downloadCurrentMix(`${fileName ? fileName + '_' : ''}ミックス.wav`, excludes)
-      } else {
-        await downloadWithExcludes(audioSrc, sections, duration, `${fileName ? fileName + '_' : ''}録音_編集済み.mp3`)
       }
     } catch (e) {
       alert(`ダウンロードに失敗しました: ${e}`)
@@ -222,14 +211,12 @@ export function SectionList({
               editAdjustValues={editAdjustValues}
               isActive={activeSectionId === s.id}
               scrollTarget={scrollTarget}
-              hasWaveform={hasWaveform}
               fileName={fileName}
               onPlay={onPlay}
               onUpdate={onUpdate}
               onDelete={onDelete}
               onToggleExclude={onToggleExclude}
               onActivate={onActivate}
-              onNormalized={onSectionNormalized}
               markerMode={markerMode}
             />
           </div>
@@ -243,19 +230,6 @@ export function SectionList({
             : sections.some((s) => s.isExcluded)
               ? '⬇ 除外区間を除いた全体をDL'
               : '⬇ 全体をダウンロード'}
-        </button>
-      )}
-
-      {mode === 'edit' && hasWaveform && onNormalizeAll && (
-        <button
-          className="normalize-all-btn"
-          onClick={onNormalizeAll}
-          disabled={normalizeAllActive}
-          title="全ての再生区間のピークを個別に検出し、1回のエンコードでまとめてノーマライズします"
-        >
-          {normalizeAllActive
-            ? '🔊 全区間ノーマライズ中...'
-            : '🔊 全ての再生区間をまとめてノーマライズ'}
         </button>
       )}
     </div>
