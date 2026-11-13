@@ -125,10 +125,10 @@ export function TrackMixer({ songId }: { songId: string }) {
       {open && (
         <div className="track-mixer-body">
           {/* スライダー操作のヒントを、カラム群の背面にうっすら表示する */}
-          {/* ウォーターマークはタイル状に敷く: 1枚だとスライダーに隠れて読めない部分が
-              出るため、縦横に繰り返し、奇数行は半分ずらして段違いにする */}
+          {/* ウォーターマークはタイル状に敷くが、全面だと邪魔なので縦の中央の帯
+              （2〜4行目相当）だけに制限する。奇数行は半分ずらして段違いにする */}
           <div className="mix-watermark" aria-hidden="true">
-            {Array.from({ length: 7 }).map((_, r) => (
+            {[1, 2, 3].map((r) => (
               <div key={r} className={`mix-wm-row${r % 2 ? ' alt' : ''}`}>
                 {Array.from({ length: 4 }).map((_, i) => (
                   <span key={i}>ダブルタップで100％</span>

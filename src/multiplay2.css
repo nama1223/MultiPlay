@@ -10,8 +10,9 @@
 
 /* 縦型ミキサー */
 .track-mixer-body { position: relative; display: flex; flex-direction: row; overflow-x: auto; overflow-y: hidden; padding: 8px 6px 10px; -webkit-overflow-scrolling: touch; }
-/* ダブルタップ100% のヒント: カラム群の背面中央にうっすら（でも読める濃さで）出す */
-.mix-watermark { position: absolute; inset: 0; overflow: hidden; font-size: 15px; font-weight: 700; letter-spacing: 2px; color: rgba(184, 255, 217, 0.26); pointer-events: none; z-index: 0; }
+/* ダブルタップ100% のヒント: 全面だと邪魔なので、縦の中央の帯（2〜4行目相当）だけに薄く出す。
+   帯の位置は行高（15px × 2.35 = 約35px）×1行ぶん下げ、3行ぶんの高さに収める */
+.mix-watermark { position: absolute; left: 0; right: 0; top: 35px; height: 106px; overflow: hidden; font-size: 15px; font-weight: 700; letter-spacing: 2px; color: rgba(184, 255, 217, 0.17); pointer-events: none; z-index: 0; }
 .mix-wm-row { display: flex; gap: 2.5em; white-space: nowrap; line-height: 2.35; }
 .mix-wm-row.alt { transform: translateX(-4.6em); }
 .reverb-control { margin: 10px 10px 0; padding: 8px 12px; border: 1px solid #2a5a44; border-radius: 10px; background: #17362a; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }

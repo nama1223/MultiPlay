@@ -20,7 +20,7 @@
   var rec = loadRec();
   if (!rec.chapters) rec.chapters = {};
 
-  var ASSET_V = '17'; // 素材・キットの版。更新のたびに上げると端末側の古いキャッシュを確実に回避できる
+  var ASSET_V = '18'; // 素材・キットの版。更新のたびに上げると端末側の古いキャッシュを確実に回避できる
   function poseSrc(pose) { return IMG + 'N_' + pose + '.webp?v=' + ASSET_V; }
   function chapterById(id) { for (var i = 0; i < cfg.chapters.length; i++) if (cfg.chapters[i].id === id) return cfg.chapters[i]; return null; }
   function isDone(ch) { var r = rec.chapters[ch.id]; return !!(r && r.done && r.version >= (ch.since || 1)); }
@@ -464,7 +464,7 @@
       else top = Math.max(12, rect.top - bh - 14);
       bubble.style.top = top + 'px';
       var pose = step.pose || 'wave';
-      if (pose === 'point' && rect) pose = pointPose(rect, bubbleBelow);
+      if (pose === 'point') pose = rect ? pointPose(rect, bubbleBelow) : 'thinking';
       charImg.src = poseSrc(pose);
     };
     player._place = place;

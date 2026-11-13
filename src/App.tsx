@@ -88,19 +88,37 @@ export default function App() {
   // rangeEndKey = 'next'（既定: 次のマーカーで停止）| 終了マーカーのID | 'songEnd'（曲の最後）
   const [rangeEndKey, setRangeEndKey] = useState<string>('next')
   const [rangeLoop, setRangeLoop] = useState(false)
-  // 開始マーカーを選び直したら、終了は「次のマーカー」に戻す
-  useEffect(() => { setRangeEndKey('next') }, [activeSectionId])
+  // 範囲の組み立ては ref 側だけを見て行う（表示用 state とはハンドラで同時更新し、
+  // 常に同じ値に保つ）。描画のタイミングに左右されず、バーに出ている値が
+  // そのまま武装される値になるよう、単一の出所にするため
+  const activeSectionIdRef = useRef<string | null>(null)
+  const rangeEndKeyRef = useRef('next')
+  const rangeLoopRef = useRef(false)
+  const applyRangeEndKey = useCallback((v: string) => { rangeEndKeyRef.current = v; setRangeEndKey(v) }, [])
+  const applyRangeLoop = useCallback((v: boolean) => { rangeLoopRef.current = v; setRangeLoop(v) }, [])
   const [fileLoadCounter, setFileLoadCounter] = useState(0)
   const [scrollTarget, setScrollTarget] = useState<{ id: string; seq: number } | null>(null)
 
   const {
     audioRef, currentTime, duration, isPlaying, src,
-    togglePlayPause, seek, skip, playSection,
+    togglePlayPause, seek, skip, playSection, clearRange,
     loadUrl,
     playbackRate, changePlaybackRate, loadState,
     pitchKeep, setPitchKeep, pendingRate, confirmRateChange, rateProcessing, rateError,
   } = useAudioPlayer()
   const [mixerKey, setMixerKey] = useState(0)
+
+  // マーカー選択の単一入口: 別のマーカーを選んだら、その場で範囲バーを既定へ戻し、
+  // 武装中の範囲も解除する（表示と監視を常に一致させる）
+  const selectMarker = useCallback((id: string | null) => {
+    if (id !== activeSectionIdRef.current) {
+      applyRangeEndKey('next')
+      applyRangeLoop(false)
+      clearRange()
+    }
+    activeSectionIdRef.current = id
+    setActiveSectionId(id)
+  }, [applyRangeEndKey, applyRangeLoop, clearRange])
 
   const { sections, addSection, updateSection, deleteSection, importSections, undo, redo, undoCount, redoCount, setDurationHint } = useSections()
   // endTime 再導出用に、エンジンの尺をマーカー状態側へ渡す
@@ -322,28 +340,33 @@ export default function App() {
   }
 
   const handleSectionLabelClick = (id: string) => {
-    setActiveSectionId(id)
+    selectMarker(id)
     setScrollTarget((prev) => ({ id, seq: (prev?.seq ?? 0) + 1 }))
   }
 
-  // マーカー再生: 既定の終了位置は「次のマーカー（なければ曲末）」。
-  // 選択中マーカーの再生には、範囲バーの指定（終了マーカー・ループ）を反映する
+  // マーカー再生: 範囲 {開始, 終了, ループ} を組み立てる単一の出所。
+  // まず開始マーカーを選択し直し（別のマーカーなら範囲バーは既定へ戻る）、
+  // その時点のバーの最新値（ref）から範囲を組み立て、playSection で武装する。
+  // 既定の終了位置は「次のマーカー（なければ曲末）」、ループは OFF。
+  // バーの値が効くのは、再生モードで開始マーカーが選択中だった場合だけ
   const playMarker = useCallback((startTime: number, _endTime: number) => {
     const sorted = [...sections].sort((a, b) => a.startTime - b.startTime)
     const idx = sorted.findIndex(s => Math.abs(s.startTime - startTime) < 0.01)
+    const sec = idx >= 0 ? sorted[idx] : null
+    if (sec) selectMarker(sec.id)
     let end = idx >= 0 && idx + 1 < sorted.length ? sorted[idx + 1].startTime : duration
     let loop = false
-    const sec = idx >= 0 ? sorted[idx] : null
-    if (sec && sec.id === activeSectionId) {
-      if (rangeEndKey === 'songEnd') end = duration
-      else if (rangeEndKey !== 'next') {
-        const target = sorted.find(s => s.id === rangeEndKey)
+    if (sec && modeRef.current === 'play') {
+      const key = rangeEndKeyRef.current
+      if (key === 'songEnd') end = duration
+      else if (key !== 'next') {
+        const target = sorted.find(s => s.id === key)
         if (target && target.startTime > startTime) end = target.startTime
       }
-      loop = rangeLoop
+      loop = rangeLoopRef.current
     }
     playSection(startTime, end, { loop })
-  }, [sections, duration, playSection, activeSectionId, rangeEndKey, rangeLoop])
+  }, [sections, duration, playSection, selectMarker])
 
   // 範囲バー用: 選択中マーカーと、その後ろのマーカー一覧
   const sortedForRange = [...sections].sort((a, b) => a.startTime - b.startTime)
@@ -355,7 +378,7 @@ export default function App() {
     const start = currentTime
     const end = Math.min(currentTime + 30, duration || currentTime + 30)
     const id = addSection(start, end)
-    setActiveSectionId(id)
+    selectMarker(id)
   }
 
   const handleMarkStart = () => {
@@ -587,7 +610,7 @@ export default function App() {
                   <select
                     className="range-bar-select"
                     value={rangeEndKey}
-                    onChange={(e) => setRangeEndKey(e.target.value)}
+                    onChange={(e) => applyRangeEndKey(e.target.value)}
                     aria-label="範囲の終了マーカー"
                   >
                     <option value="next">次のマーカー</option>
@@ -599,7 +622,7 @@ export default function App() {
                   <button
                     type="button"
                     className={`range-loop-chip${rangeLoop ? ' on' : ''}`}
-                    onClick={() => setRangeLoop(v => !v)}
+                    onClick={() => applyRangeLoop(!rangeLoop)}
                     aria-pressed={rangeLoop}
                   >ループ {rangeLoop ? 'ON' : 'OFF'}</button>
                 </div>
@@ -617,7 +640,7 @@ export default function App() {
                   onPlay={playMarker}
                   onUpdate={updateSection}
                   onDelete={deleteSection}
-                  onActivate={setActiveSectionId}
+                  onActivate={selectMarker}
                   scrollTarget={scrollTarget}
                   fileName={fileName}
                   onAddSection={handleAddSection}

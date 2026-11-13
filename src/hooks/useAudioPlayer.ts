@@ -72,9 +72,12 @@ export function useAudioPlayer() {
     setPendingRate(pending)
   }, [])
 
-  const sectionEndRef = useRef<number | null>(null)
-  /** 範囲ループ再生が有効な間だけ {開始, 終了} を持つ（終了位置は sectionEndRef と一致させる） */
-  const sectionLoopRef = useRef<{ start: number; end: number } | null>(null)
+  /**
+   * 武装中の範囲 {開始, 終了, ループ}。範囲の出所はここだけ:
+   * playSection が再生開始時に確定（arm）し、終了監視はこの ref だけを見る。
+   * 本体の再生/シーク/スキップや、マーカー選択の変更では解除（disarm）される。
+   */
+  const armedRangeRef = useRef<{ start: number; end: number; loop: boolean } | null>(null)
 
   // 再生位置のポーリング（マーカー再生の終了位置もここで見る）
   useEffect(() => {
@@ -84,47 +87,55 @@ export function useAudioPlayer() {
       setCurrentTime(t)
       setIsPlaying(engine.playing)
       if (!engine.playing) { prev = t; return }
-      const end = sectionEndRef.current
+      const armed = armedRangeRef.current
       // 終了位置を「跨いだ」瞬間だけ反応する（終了より後ろから再生し直した時に巻き戻らないように）
-      if (end !== null && prev < end && t >= end) {
-        const loop = sectionLoopRef.current
-        if (loop && loop.end === end) {
-          engine.seek(loop.start)
-          prev = loop.start
-          setCurrentTime(loop.start)
+      if (armed && prev < armed.end && t >= armed.end) {
+        if (armed.loop) {
+          engine.seek(armed.start)
+          prev = armed.start
+          setCurrentTime(armed.start)
           return
         }
         engine.pause()
-        sectionEndRef.current = null
-        sectionLoopRef.current = null
+        armedRangeRef.current = null
       }
       prev = t
     }, 100)
     return () => clearInterval(id)
   }, [])
 
+  /** 範囲の武装を解除する（本体操作・選択変更・曲の読み込みで使う） */
+  const clearRange = useCallback(() => {
+    armedRangeRef.current = null
+  }, [])
+
   const togglePlayPause = useCallback(() => {
     if (!loadReadyRef.current) return
+    // 本体ボタンからの再生は曲全体の再生。古い範囲が残っていて
+    // 途中で止まる/巻き戻ることが無いよう、必ず解除してから切り替える
+    armedRangeRef.current = null
     engine.toggle()
     setIsPlaying(engine.playing)
   }, [])
 
   const seek = useCallback((time: number) => {
     if (!loadReadyRef.current) return
+    armedRangeRef.current = null
     engine.seek(time)
     setCurrentTime(engine.position())
   }, [])
 
   const skip = useCallback((delta: number) => {
     if (!loadReadyRef.current) return
+    armedRangeRef.current = null
     engine.seek(engine.position() + delta)
     setCurrentTime(engine.position())
   }, [])
 
   const playSection = useCallback((startTime: number, endTime: number, opts?: { loop?: boolean }) => {
     if (!loadReadyRef.current) return
-    sectionEndRef.current = endTime
-    sectionLoopRef.current = opts?.loop ? { start: startTime, end: endTime } : null
+    // 再生開始時に範囲をここへ確定する。以後の監視はこの値だけを見る
+    armedRangeRef.current = { start: startTime, end: endTime, loop: !!opts?.loop }
     engine.play(startTime)
     setIsPlaying(true)
   }, [])
@@ -229,8 +240,7 @@ export function useAudioPlayer() {
     setCurrentTime(0)
     setDuration(0)
     setRateError('')
-    sectionEndRef.current = null
-    sectionLoopRef.current = null
+    armedRangeRef.current = null
     loadReadyRef.current = false
     setLoadState({ status: 'loading', phase: '曲データを取得中…', done: 0, total: 0, error: '' })
     ;(async () => {
@@ -303,6 +313,7 @@ export function useAudioPlayer() {
     seek,
     skip,
     playSection,
+    clearRange,
     loadFile,
     loadUrl,
     loadState,
