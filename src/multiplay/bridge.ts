@@ -89,24 +89,41 @@ export function storeDownloadFormat(f: DownloadFormat): void {
   try { localStorage.setItem(DL_FORMAT_LS_KEY, f) } catch { /* 保存できなくても動作は続ける */ }
 }
 
-/** 現在のバランスで全体のミックスを書き出してダウンロードさせる（マーカーリストの全体DL用） */
-export async function downloadCurrentMix(fileBase: string, format: DownloadFormat): Promise<void> {
-  // 書き出しは現行仕様どおりドライにする（リバーブは再生にだけ効かせる）。
+/** 現在のバランスでミックスを書き出す。書き出しは現行仕様どおりドライ（リバーブ0）にする */
+async function renderDryMix(range?: { start: number; end: number }): Promise<AudioBuffer> {
   // renderMixdownBuffer はエンジンの reverbAmount を参照して配分を決めるので、
   // 書き出しの間だけ 0 に退避する。再生側の wet/dry ゲインには触らない。
   const prevReverb = engine.reverbAmount
   engine.reverbAmount = 0
-  let blob: Blob
   try {
-    const buffer = await engine.renderMixdownBuffer(currentMix)
-    blob = format === 'mp3' ? encodeMp3(buffer) : encodeWav(buffer)
+    return await engine.renderMixdownBuffer(currentMix, range)
   } finally {
     engine.reverbAmount = prevReverb
   }
+}
+
+function saveBlob(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `${fileBase}.${format}`
+  a.download = fileName
+  // DOM に繋いでからクリックする（外れたままのアンカーだと download 属性の
+  // ファイル名がブラウザに伝わらないことがあるため）
+  document.body.appendChild(a)
   a.click()
+  a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 5000)
+}
+
+/** 現在のバランスで全体のミックスを書き出してダウンロードさせる（マーカーリストの全体DL用） */
+export async function downloadCurrentMix(fileBase: string, format: DownloadFormat): Promise<void> {
+  const buffer = await renderDryMix()
+  const blob = format === 'mp3' ? encodeMp3(buffer) : encodeWav(buffer)
+  saveBlob(blob, `${fileBase}.${format}`)
+}
+
+/** 選択中の範囲だけを現在のバランスで切り取って MP3 でダウンロードさせる（範囲DL用） */
+export async function downloadRangeMix(fileBase: string, start: number, end: number): Promise<void> {
+  const buffer = await renderDryMix({ start, end })
+  saveBlob(encodeMp3(buffer), `${fileBase}.mp3`)
 }

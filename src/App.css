@@ -509,31 +509,7 @@
   padding: 4px 0;
 }
 
-/* ── 範囲バー（マーカーリストの直上。終了マーカーとループの指定） ── */
-.range-bar {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 5px 10px;
-  background: #101d15;
-  border-top: 1px solid #1b3327;
-  border-bottom: 1px solid #1b3327;
-  font-size: 12px;
-  color: #a9d9bd;
-}
-.range-bar-caption { color: #82b294; font-weight: 700; flex-shrink: 0; }
-.range-bar-start { font-weight: 700; color: #eafff2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 8em; }
-.range-bar-arrow { color: #82b294; flex-shrink: 0; }
-.range-bar-select {
-  flex: 1;
-  min-width: 0;
-  background: #17362a;
-  color: #eafff2;
-  border: 1px solid #2a5a44;
-  border-radius: 6px;
-  font-size: 12px;
-  padding: 4px 6px;
-}
+/* ── 範囲再生の行操作（開始行に出るループ切替チップ） ── */
 .range-loop-chip {
   flex-shrink: 0;
   border: 1px solid #2a5a44;
@@ -633,6 +609,68 @@
 .section-item.active {
   background: #1d4a34;
 }
+
+/* 範囲選択に含まれる行（開始行〜終了行）は背景色を変えて範囲を見せる */
+.section-item.in-range {
+  background: #14402c;
+}
+.section-item.active.in-range {
+  background: #1d4a34;
+}
+
+/* 開始行のマーカー名の横に出る「ここから」 */
+.range-from-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  color: #0c2417;
+  background: #63e6a4;
+  border-radius: 999px;
+  padding: 2px 7px;
+}
+
+/* 開始行の右端コントロール（ループ・DL・再生） */
+.section-item-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+.section-item-controls .marker-play-btn { margin-left: 0; }
+.section-item-controls .range-loop-chip { height: 30px; padding: 0 10px; }
+
+.marker-dl-btn {
+  flex-shrink: 0;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 9px;
+  background: #1a3028;
+  color: #5ecfb8;
+  border: 1px solid #2a5a44;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.marker-dl-btn:disabled { opacity: 0.5; cursor: default; }
+.marker-dl-btn:active { opacity: 0.7; }
+
+/* 下の行に出る「ここまで」ボタン */
+.range-to-btn {
+  flex-shrink: 0;
+  height: 30px;
+  margin-left: 8px;
+  padding: 0 10px;
+  border-radius: 9px;
+  background: #17362a;
+  color: #a9d9bd;
+  border: 1px solid #2a5a44;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.range-to-btn.on { background: #63e6a4; color: #0c2417; border-color: #63e6a4; }
+.range-to-btn:active { opacity: 0.7; }
 
 .section-item-main {
   display: flex;

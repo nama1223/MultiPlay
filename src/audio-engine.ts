@@ -360,14 +360,19 @@ export class MultiTrackEngine {
     }
   }
 
-  /** 現在のバランス・オフセット・リバーブで全体をオフライン書き出しして AudioBuffer を返す */
-  async renderMixdownBuffer(mix: Record<string, MixState>): Promise<AudioBuffer> {
+  /**
+   * 現在のバランス・オフセット・リバーブでオフライン書き出しして AudioBuffer を返す。
+   * range（元のタイムラインの秒）を渡すと、その範囲だけを切り取って書き出す。
+   */
+  async renderMixdownBuffer(mix: Record<string, MixState>, range?: { start: number; end: number }): Promise<AudioBuffer> {
     const rate = 44100
     // 書き出しはバッファのタイムラインで計算する（伸縮中は元タイムライン ÷ テンポ）。
     // ロード中のバッファを使うので、適用中の速度・ピッチ維持がそのまま書き出される。
     const ts = this.bufferScale()
-    const kept: { start: number; end: number }[] = [{ start: 0, end: this.duration / ts }]
-    const keptTotal = this.duration / ts
+    const kept: { start: number; end: number }[] = range
+      ? [{ start: Math.max(0, range.start / ts), end: Math.min(this.duration / ts, range.end / ts) }]
+      : [{ start: 0, end: this.duration / ts }]
+    const keptTotal = kept.reduce((sum, seg) => sum + (seg.end - seg.start), 0)
 
     const length = Math.ceil(keptTotal * rate) + Math.floor(rate * 0.2)
     const off = new OfflineAudioContext(2, length, rate)
