@@ -157,6 +157,8 @@ export function TrackSeekBar({ currentTime, duration, sections, mode, activeSect
   return (
     <div className="seekbar-container tseek">
       <div className="tseek-zoombar">
+        {/* 行幅全体＝総時間として、現在のシーク位置を赤線で示す（ボタンの背面） */}
+        <div className="tseek-zoom-pos" style={{ left: `${playFrac * 100}%` }} />
         <span className="tseek-zoom-label">ズーム</span>
         <button
           className="tseek-zoom-btn"
@@ -226,6 +228,10 @@ export function TrackSeekBar({ currentTime, duration, sections, mode, activeSect
                 ))}
                 <div className="tseek-playhead" style={{ left: `${playFrac * 100}%` }} />
               </div>
+
+              {/* 冒頭（0秒）と最終（duration）の位置を示す太線（ズーム座標に追随） */}
+              <div className="tseek-edge start" />
+              <div className="tseek-edge end" />
             </div>
           </div>
         </div>

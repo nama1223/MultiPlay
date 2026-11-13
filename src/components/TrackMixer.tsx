@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { engine, setCurrentMix } from '../multiplay/bridge'
 import { songUrl } from '../config'
 import type { MixState } from '../audio-engine'
@@ -8,13 +8,20 @@ const THIRD = 1 / 3
 
 /**
  * トラック別ミキサー（縦型フェーダー形式）。
- * トラックごとの縦カラム: 上=名前、中=縦スライダー、下=%表示と M / 1/3 / S ボタン。
+ * カラム構成: [名前][縦スライダー][%表示][M][1/3] の行＋その下に [Solo]（カラム幅いっぱい）。
+ * 「1/3」はトグル式: 押すと元の音量を覚えて33%にし、もう一度押すと元の音量に戻る。
+ * %表示をタップすると数値入力に切り替わり、スライダーのダブルタップで100%に戻る。
  * 横に収まらない場合はカラム列が横スクロールする。
  */
 export function TrackMixer({ songId }: { songId: string }) {
   const [manifest, setManifest] = useState<MpSongManifest | null>(null)
   const [mix, setMix] = useState<Record<string, MixState>>({})
   const [open, setOpen] = useState(() => localStorage.getItem('mp_mixer_open') !== '0')
+  const [thirdMem, setThirdMem] = useState<Record<string, number>>({})
+  const [editVal, setEditVal] = useState<{ id: string; text: string } | null>(null)
+  const escRef = useRef(false)
+  // ダブルタップ検出（スライダー操作のドラッグと区別するため、短時間・小移動のタップだけ数える）
+  const tapRef = useRef<Record<string, { downAt: number; downX: number; downY: number; lastTapAt: number }>>({})
   const toggleOpen = () => setOpen(v => {
     localStorage.setItem('mp_mixer_open', v ? '0' : '1')
     return !v
@@ -23,6 +30,8 @@ export function TrackMixer({ songId }: { songId: string }) {
   useEffect(() => {
     let alive = true
     setManifest(null)
+    setThirdMem({})
+    setEditVal(null)
     fetch(songUrl(songId))
       .then(r => (r.ok ? r.json() : null))
       .then((m: MpSongManifest | null) => {
@@ -44,31 +53,109 @@ export function TrackMixer({ songId }: { songId: string }) {
   const set = (id: string, patch: Partial<MixState>) =>
     setMix(prev => ({ ...prev, [id]: { ...prev[id], ...patch } }))
 
+  /** 手動で音量を変えたら 1/3 トグルの復帰先は無効になる */
+  const forgetThird = (id: string) =>
+    setThirdMem(prev => {
+      if (!(id in prev)) return prev
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+
+  const setVolumeManual = (id: string, volume: number) => {
+    forgetThird(id)
+    set(id, { volume })
+  }
+
+  const toggleThird = (id: string) => {
+    const cur = mix[id]?.volume ?? 1
+    if (id in thirdMem) {
+      const back = thirdMem[id]
+      forgetThird(id)
+      set(id, { volume: back })
+    } else {
+      setThirdMem(prev => ({ ...prev, [id]: cur }))
+      set(id, { volume: THIRD })
+    }
+  }
+
+  const onSliderPointerDown = (id: string, e: React.PointerEvent) => {
+    const rec = tapRef.current[id] ?? { downAt: 0, downX: 0, downY: 0, lastTapAt: 0 }
+    rec.downAt = Date.now(); rec.downX = e.clientX; rec.downY = e.clientY
+    tapRef.current[id] = rec
+  }
+  const onSliderPointerUp = (id: string, e: React.PointerEvent) => {
+    const rec = tapRef.current[id]
+    if (!rec) return
+    const now = Date.now()
+    const isTap = now - rec.downAt < 300 && Math.hypot(e.clientX - rec.downX, e.clientY - rec.downY) < 6
+    if (!isTap) { rec.lastTapAt = 0; return }
+    if (now - rec.lastTapAt < 350) {
+      rec.lastTapAt = 0
+      setVolumeManual(id, 1)
+    } else {
+      rec.lastTapAt = now
+    }
+  }
+
+  const commitValEdit = (id: string) => {
+    if (escRef.current) { escRef.current = false; setEditVal(null); return }
+    if (!editVal || editVal.id !== id) return
+    const n = parseFloat(editVal.text)
+    if (!isNaN(n)) setVolumeManual(id, Math.max(0, Math.min(150, n)) / 100)
+    setEditVal(null)
+  }
+
   return (
     <div className="track-mixer">
       <button className="track-mixer-head" onClick={toggleOpen} aria-expanded={open}>
         <span className="track-mixer-title">トラック音量</span>
-        <span className="track-mixer-chevron">{open ? '▲ 畳む' : '▼ 開く'}</span>
+        <span className="head-state">{open ? '▲ 畳む' : '▼ 開く'}</span>
       </button>
       {open && (
         <div className="track-mixer-body">
           {manifest.tracks.map(t => {
             const m = mix[t.id] ?? { volume: 1, mute: false, solo: false }
-            const isThird = Math.abs(m.volume - THIRD) < 0.02
+            const thirdOn = t.id in thirdMem
+            const editing = editVal?.id === t.id
             return (
               <div key={t.id} className="mix-col">
                 <span className="mix-name" title={t.name}>{t.name}</span>
                 <input
                   type="range" min={0} max={150} value={Math.round(m.volume * 100)}
-                  onChange={e => set(t.id, { volume: Number(e.target.value) / 100 })}
+                  onChange={e => setVolumeManual(t.id, Number(e.target.value) / 100)}
+                  onDoubleClick={() => setVolumeManual(t.id, 1)}
+                  onPointerDown={e => onSliderPointerDown(t.id, e)}
+                  onPointerUp={e => onSliderPointerUp(t.id, e)}
                   className="mix-vol" aria-label={`${t.name} の音量`}
+                  title="ダブルタップで100%"
                 />
-                <span className="mix-val">{Math.round(m.volume * 100)}%</span>
+                {editing ? (
+                  <input
+                    type="number" min={0} max={150} step={1}
+                    className="mix-val-input"
+                    value={editVal.text}
+                    autoFocus
+                    aria-label={`${t.name} の音量（%）`}
+                    onChange={e => setEditVal({ id: t.id, text: e.target.value })}
+                    onBlur={() => commitValEdit(t.id)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                      if (e.key === 'Escape') { escRef.current = true; (e.target as HTMLInputElement).blur() }
+                    }}
+                  />
+                ) : (
+                  <button
+                    className="mix-val"
+                    title="タップで数値を直接入力"
+                    onClick={() => { escRef.current = false; setEditVal({ id: t.id, text: String(Math.round(m.volume * 100)) }) }}
+                  >{Math.round(m.volume * 100)}%</button>
+                )}
                 <div className="mix-btns">
                   <button className={`mix-btn${m.mute ? ' on-mute' : ''}`} onClick={() => set(t.id, { mute: !m.mute })} title="ミュート">M</button>
-                  <button className={`mix-btn${isThird ? ' on-third' : ''}`} onClick={() => set(t.id, { volume: THIRD })} title="音量を1/3にする">1/3</button>
-                  <button className={`mix-btn${m.solo ? ' on-solo' : ''}`} onClick={() => set(t.id, { solo: !m.solo })} title="ソロ">S</button>
+                  <button className={`mix-btn${thirdOn ? ' on-third' : ''}`} onClick={() => toggleThird(t.id)} title="音量を1/3にする（もう一度押すと元に戻る）">1/3</button>
                 </div>
+                <button className={`mix-solo${m.solo ? ' on-solo' : ''}`} onClick={() => set(t.id, { solo: !m.solo })} title="ソロ">Solo</button>
               </div>
             )
           })}

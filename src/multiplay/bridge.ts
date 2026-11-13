@@ -12,6 +12,7 @@ import type { MixState } from '../audio-engine'
 
 let currentMix: Record<string, MixState> = {}
 export function setCurrentMix(mix: Record<string, MixState>) { currentMix = mix }
+export function getCurrentMix(): Record<string, MixState> { return currentMix }
 
 /** 現在のバランスで全体のミックスを書き出してダウンロードさせる（マーカーリストの全体DL用） */
 export async function downloadCurrentMix(fileName: string): Promise<void> {

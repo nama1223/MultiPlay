@@ -29,7 +29,8 @@ interface Props {
 
 /**
  * マーカーリスト。並びは常に時間順（開始時刻の昇順）で固定。
- * 編集モードでは、選択中マーカーの編集ブロックをリスト下部に1つだけ出す。
+ * 再生モードは1行表示＋再生ボタン常時表示。
+ * 編集モードは行を展開して、行内に編集UI（FlagEditor）を出す折りたたみ式。
  */
 export function SectionList({
   sections,
@@ -53,8 +54,14 @@ export function SectionList({
 }: Props) {
   const [dlAll, setDlAll] = useState(false)
   const [armDeleteId, setArmDeleteId] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const armTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // 波形側からマーカーが選ばれたら、編集モードではその行を展開する
+  useEffect(() => {
+    if (scrollTarget && mode === 'edit') setExpandedId(scrollTarget.id)
+  }, [scrollTarget, mode])
 
   // Scroll to the target marker row
   useEffect(() => {
@@ -86,7 +93,12 @@ export function SectionList({
 
   // 常に時間順
   const displayed = [...sections].sort((a, b) => a.startTime - b.startTime)
-  const active = mode === 'edit' ? displayed.find(s => s.id === activeSectionId) ?? null : null
+
+  /** 行タップ: 選択し、編集モードではその行の展開/折りたたみも切り替える */
+  const handleActivate = (id: string) => {
+    onActivate(id)
+    if (mode === 'edit') setExpandedId(prev => (prev === id ? null : id))
+  }
 
   const handleDelete = (s: Section) => {
     if (armDeleteId !== s.id) {
@@ -136,39 +148,42 @@ export function SectionList({
           {mode === 'edit' ? '＋ボタンでマーカーを追加できます' : 'マーカーが設定されていません'}
         </p>
       ) : (
-        displayed.map((s) => (
-          <div key={s.id} data-section-id={s.id}>
-            <SectionItem
-              section={s}
-              mode={mode}
-              isActive={activeSectionId === s.id}
-              onPlay={onPlay}
-              onUpdate={onUpdate}
-              onActivate={onActivate}
-              markerMode={markerMode}
-            />
-          </div>
-        ))
-      )}
-
-      {active && (
-        <div className="marker-edit-block">
-          <FlagEditor
-            key={active.id}
-            section={active}
-            duration={duration}
-            editAdjustValues={editAdjustValues}
-            onUpdate={onUpdate}
-            onPlay={onPlay}
-            markerMode={markerMode}
-          />
-          <button
-            className="action-btn delete compact"
-            onClick={() => handleDelete(active)}
-          >
-            {armDeleteId === active.id ? `🗑 もう一度押すと「${active.label}」を削除` : '🗑 このマーカーを削除'}
-          </button>
-        </div>
+        displayed.map((s) => {
+          const expanded = mode === 'edit' && expandedId === s.id
+          return (
+            <div key={s.id} data-section-id={s.id}>
+              <SectionItem
+                section={s}
+                mode={mode}
+                isActive={activeSectionId === s.id}
+                onPlay={onPlay}
+                onUpdate={onUpdate}
+                onActivate={handleActivate}
+                onSelectOnly={onActivate}
+                markerMode={markerMode}
+                editor={expanded ? (
+                  <div className="section-item-editor">
+                    <FlagEditor
+                      key={s.id}
+                      section={s}
+                      duration={duration}
+                      editAdjustValues={editAdjustValues}
+                      onUpdate={onUpdate}
+                      onPlay={onPlay}
+                      markerMode={markerMode}
+                    />
+                    <button
+                      className="action-btn delete compact"
+                      onClick={() => handleDelete(s)}
+                    >
+                      {armDeleteId === s.id ? `🗑 もう一度押すと「${s.label}」を削除` : '🗑 このマーカーを削除'}
+                    </button>
+                  </div>
+                ) : undefined}
+              />
+            </div>
+          )
+        })
       )}
 
       {mode === 'play' && audioSrc && (

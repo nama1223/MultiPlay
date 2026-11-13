@@ -9,13 +9,17 @@ interface Props {
   onPlay: (start: number, end: number) => void
   onUpdate: (id: string, updates: Partial<Section>) => void
   onActivate: (id: string) => void
+  /** ラベルタップ時はこちら（展開トグルを伴わない活性化） */
+  onSelectOnly?: (id: string) => void
+  /** 編集モードで展開時に行内へ出す編集UI */
+  editor?: React.ReactNode
   /** マーカー（開始点だけ）として表示する */
   markerMode?: boolean
 }
 
 /**
- * マーカーリストの1行。折りたたみは廃止し、常に1行表示＋再生ボタン常時表示。
- * 編集モードで選択中のマーカーの編集UIは、リスト下部の編集ブロックに出る。
+ * マーカーリストの1行。常に1行表示＋再生ボタン常時表示。
+ * 編集モードでは行を展開して、行内に編集UI（FlagEditor）が出る。
  */
 export function SectionItem({
   section,
@@ -24,6 +28,8 @@ export function SectionItem({
   onPlay,
   onUpdate,
   onActivate,
+  onSelectOnly,
+  editor,
   markerMode,
 }: Props) {
   const [editingLabel, setEditingLabel] = useState(false)
@@ -32,7 +38,7 @@ export function SectionItem({
   const handleLabelTap = (e: React.MouseEvent) => {
     if (mode !== 'edit') return
     e.stopPropagation()
-    onActivate(section.id)
+    ;(onSelectOnly ?? onActivate)(section.id)
     setLabelVal(section.label)
     setEditingLabel(true)
   }
@@ -79,6 +85,7 @@ export function SectionItem({
           onClick={(e) => { e.stopPropagation(); onPlay(section.startTime, section.endTime) }}
         >▶</button>
       </div>
+      {editor}
     </div>
   )
 }

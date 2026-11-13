@@ -358,7 +358,9 @@ export default function App() {
               {mode === 'edit' && fileKey && (
                 <SongEditPanel
                   songId={fileKey}
+                  isPlaying={isPlaying}
                   onSaved={handleSongSaved}
+                  onTitleSaved={setFileName}
                   onDeleted={handleSongDeleted}
                 />
               )}

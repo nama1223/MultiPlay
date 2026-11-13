@@ -12,7 +12,7 @@ interface Props {
   markerMode?: boolean
 }
 
-/** 選択中マーカーの編集ブロック（マーカーリスト下部に1つだけ出す） */
+/** マーカーの編集UI（編集モードで展開した行の中に出す） */
 export function FlagEditor({ section, duration, editAdjustValues, onUpdate, onPlay, markerMode }: Props) {
   const [startInput, setStartInput] = useState(String(section.startTime.toFixed(1)))
   const [endInput, setEndInput] = useState(String(section.endTime.toFixed(1)))

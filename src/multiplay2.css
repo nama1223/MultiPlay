@@ -3,10 +3,10 @@
 .change-btn:active { background: #256b47; }
 .track-mixer { margin: 10px 10px 0; border: 1px solid #2a5a44; border-radius: 10px; background: #17362a; overflow: hidden; flex-shrink: 0; }
 .track-mixer-title { font-size: 13px; font-weight: 700; color: #b8ffd9; letter-spacing: 0.4px; }
-/* 畳む/開く見出しは、幅いっぱいのボタンらしいバーにする（押せる範囲を一目で分かるように） */
-.track-mixer-head { display: flex; align-items: center; justify-content: space-between; width: 100%; background: #1d4a34; border: none; border-bottom: 1px solid #2a5a44; padding: 11px 12px; cursor: pointer; text-align: left; }
+/* 畳む/開く見出しは、行全体が1つの横長いボタンだと分かる見た目にする（内側に小ボタン風要素は置かない） */
+.track-mixer-head { display: flex; align-items: center; justify-content: space-between; width: 100%; background: #1d4a34; border: none; border-bottom: 2px solid #3f7d5c; padding: 12px; cursor: pointer; text-align: left; box-sizing: border-box; }
 .track-mixer-head:active { background: #256b47; }
-.track-mixer-chevron { font-size: 11px; font-weight: 700; color: #b8ffd9; background: #256b47; border: 1px solid #3f7d5c; border-radius: 8px; padding: 4px 10px; flex-shrink: 0; }
+.head-state { font-size: 11px; font-weight: 700; color: #82b294; flex-shrink: 0; letter-spacing: 0.4px; }
 
 /* 縦型ミキサー */
 .track-mixer-body { display: flex; flex-direction: row; overflow-x: auto; overflow-y: hidden; padding: 8px 6px 10px; -webkit-overflow-scrolling: touch; }
@@ -14,12 +14,15 @@
 .mix-col:last-child { border-right: none; }
 .mix-name { font-size: 12px; font-weight: 600; color: #eeeeff; width: 3.4em; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mix-vol { writing-mode: vertical-lr; direction: rtl; width: 26px; height: 118px; accent-color: #16a34a; cursor: pointer; }
-.mix-val { font-size: 11px; color: #82b294; font-variant-numeric: tabular-nums; }
+.mix-val { font-size: 11px; color: #82b294; font-variant-numeric: tabular-nums; background: none; border: none; border-bottom: 1px dotted #4f7a5f; padding: 1px 2px; cursor: pointer; }
+.mix-val-input { width: 52px; font-size: 12px; padding: 2px 4px; background: #0d2016; border: 1px solid #16a34a; border-radius: 6px; color: #eeeeff; text-align: center; font-variant-numeric: tabular-nums; }
 .mix-btns { display: flex; gap: 3px; }
 .mix-btn { min-width: 25px; height: 26px; padding: 0 3px; border-radius: 8px; border: 1px solid #2a5a44; background: #1d4a34; color: #a9d9bd; cursor: pointer; font-weight: bold; font-size: 10px; }
 .mix-btn.on-mute { background: #5a2438; border-color: #8a3a5a; color: #ffb0c0; }
-.mix-btn.on-solo { background: #16a34a; border-color: #16a34a; color: #fff; }
 .mix-btn.on-third { background: #16a34a; border-color: #16a34a; color: #fff; }
+/* Solo はカラム幅いっぱいの独立行 */
+.mix-solo { width: 100%; height: 26px; border-radius: 8px; border: 1px solid #2a5a44; background: #1d4a34; color: #a9d9bd; cursor: pointer; font-weight: bold; font-size: 11px; letter-spacing: 0.6px; }
+.mix-solo.on-solo { background: #16a34a; border-color: #16a34a; color: #fff; }
 
 /* 読み込み中オーバーレイ＋ゲージ */
 .player { position: relative; }
@@ -57,16 +60,23 @@
 .file-create { margin: 18px 10px 0; border: 1px dashed #2a5a44; border-radius: 10px; padding: 12px; background: rgba(23, 54, 42, 0.5); }
 .file-create-title { font-size: 13px; font-weight: 700; color: #63e6a4; margin-bottom: 4px; }
 .file-create-note { font-size: 11px; color: #82b294; margin: 4px 0 0; }
-/* マーカーリスト: 行内再生ボタン＋選択中マーカーの編集ブロック */
+/* マーカーリスト: 行内再生ボタン＋編集モードでは行内に展開する編集UI */
 .marker-play-btn { flex-shrink: 0; width: 36px; height: 30px; margin-left: 8px; border-radius: 9px; background: #1e2a52; color: #7eb8f8; border: 1px solid #2a3a6a; font-size: 12px; cursor: pointer; }
 .marker-play-btn:active { opacity: 0.7; }
-.marker-edit-block { padding: 8px 10px 10px; border-top: 1px solid #1d4a34; background: #101024; }
-.marker-edit-block .flag-editor { margin-top: 0; }
-.marker-edit-block .action-btn.delete { margin-top: 6px; }
+.section-item-editor { padding: 2px 8px 8px; }
+.section-item-editor .flag-editor { margin-top: 0; }
+.section-item-editor .action-btn.delete { margin-top: 6px; }
 .flag-editor-name { font-size: 13px; font-weight: 600; color: #eeeeff; max-width: 8em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* トラック別シークバー */
-.tseek-zoombar { display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding: 4px 8px; background: #17362a; border-bottom: 1px solid #2a5a44; }
+.tseek-zoombar { position: relative; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 4px 8px; background: #17362a; border-bottom: 1px solid #2a5a44; overflow: hidden; }
+.tseek-zoombar > *:not(.tseek-zoom-pos) { position: relative; z-index: 1; }
+/* ズーム行の背景に引く「全体から見たシーク位置」の赤線 */
+.tseek-zoom-pos { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1px; background: #ff5252; opacity: 0.85; pointer-events: none; z-index: 0; }
+/* 波形の冒頭・最終位置の太線 */
+.tseek-edge { position: absolute; top: 0; bottom: 0; width: 4px; background: rgba(223, 255, 233, 0.9); box-shadow: 0 0 5px rgba(0, 0, 0, 0.65); pointer-events: none; z-index: 6; }
+.tseek-edge.start { left: 0; }
+.tseek-edge.end { right: 0; }
 .tseek-zoom-label { font-size: 11px; color: #82b294; }
 .tseek-zoom-val { font-size: 11px; color: #a9d9bd; min-width: 2.6em; text-align: center; font-variant-numeric: tabular-nums; }
 .tseek-zoom-btn { width: 30px; height: 24px; border-radius: 7px; border: 1px solid #2a5a44; background: #1d4a34; color: #a9d9bd; font-size: 14px; font-weight: 700; cursor: pointer; line-height: 1; }
@@ -96,6 +106,18 @@
 .mp-admin-track { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border: 1px solid #2a5a44; border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; background: #17362a; }
 /* 曲データ編集のトラック行は1行に収める */
 .mp-admin-track.oneline { flex-wrap: nowrap; padding: 6px 8px; gap: 5px; }
+/* v7: トラック行は外枠を外して罫線区切りだけにし、縦を圧縮する */
+.mp-admin-track.frameless { border: none; border-bottom: 1px solid #1b3327; border-radius: 0; background: transparent; padding: 3px 2px; margin-bottom: 0; min-height: 40px; box-sizing: border-box; }
+.mp-admin-track.frameless.dragging { background: rgba(99, 230, 164, 0.08); }
+.mp-admin-track .track-del { flex-shrink: 0; min-width: 30px; padding: 6px 7px; font-size: 12px; }
+.mp-admin-track .track-del.armed { padding: 6px 9px; font-size: 11px; font-weight: 700; background: #8a2438; border-color: #ff8fa3; color: #fff; }
+.sep-drag { flex-shrink: 0; padding: 6px 3px; font-size: 14px; color: #4f7a5f; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.sep-drag:active { cursor: grabbing; color: #63e6a4; }
+/* 自動保存の状態表示 */
+.sep-sync { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0 2px; }
+.sep-sync-text { font-size: 11px; color: #82b294; }
+.sep-sync-text.error { color: #ff8fa3; }
+.sep-sync-pending { font-size: 11px; color: #f5a623; }
 .mp-admin-track .track-name-input { flex: 1 1 56px; min-width: 56px; padding: 6px; font-size: 13px; }
 .mp-admin-track .offset-input { width: 58px; padding: 6px 4px; font-size: 13px; }
 .mp-admin-track .mp-unit { font-size: 11px; color: #82b294; }
