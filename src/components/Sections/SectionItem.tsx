@@ -29,7 +29,7 @@ interface Props {
   onPlayRange?: () => void
   /** この行を範囲の終了マーカーにする */
   onChooseRangeEnd?: () => void
-  /** 開始行の [DL] ボタン */
+  /** 開始行の [範囲DL] ボタン */
   onDownloadRange?: () => void
   dlRangeBusy?: boolean
 }
@@ -37,7 +37,7 @@ interface Props {
 /**
  * マーカーリストの1行。
  * 再生モード: 全行に再生ボタンは置かない。選択した行（開始行）にだけ
- * 「ここから」表示＋再生・DL・ループが出て、下の行には「ここまで」が出る。
+ * 「ここから」表示＋範囲DL・ループ・再生（この並び）が出て、下の行には「ここまで」が出る。
  * 編集モードでは行を展開して、行内に編集UI（FlagEditor）が出る。
  */
 export function SectionItem({
@@ -115,18 +115,18 @@ export function SectionItem({
           <span className="section-item-controls">
             <button
               type="button"
+              className="marker-dl-btn"
+              onClick={(e) => { e.stopPropagation(); onDownloadRange?.() }}
+              disabled={dlRangeBusy}
+              title="選択中の範囲をMP3で保存"
+            >{dlRangeBusy ? '書出中' : '範囲DL'}</button>
+            <button
+              type="button"
               className={`range-loop-chip${rangeLoop ? ' on' : ''}`}
               onClick={(e) => { e.stopPropagation(); onToggleRangeLoop?.() }}
               aria-pressed={!!rangeLoop}
               title="範囲を繰り返し再生"
             >ループ {rangeLoop ? 'ON' : 'OFF'}</button>
-            <button
-              type="button"
-              className="marker-dl-btn"
-              onClick={(e) => { e.stopPropagation(); onDownloadRange?.() }}
-              disabled={dlRangeBusy}
-              title="選択中の範囲をMP3で保存"
-            >{dlRangeBusy ? '書出中' : 'DL'}</button>
             <button
               type="button"
               className="marker-play-btn"

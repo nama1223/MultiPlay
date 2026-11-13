@@ -124,6 +124,8 @@
 .tseek-flag.active .tseek-flag-pennant { filter: drop-shadow(0 0 3px rgba(255,255,255,0.95)); }
 .tseek-lanelabel { position: absolute; left: 0; display: flex; align-items: center; padding: 0 6px; font-size: 11px; color: #82b294; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .tseek-canvascol { position: absolute; right: 0; left: 0; }
+/* 選択中の実効範囲の塗り（レーン領域のみ。両端に薄い境界線を引く） */
+.tseek-range { position: absolute; border-left: 1px solid rgba(255, 255, 255, 0.45); border-right: 1px solid rgba(255, 255, 255, 0.45); pointer-events: none; z-index: 3; box-sizing: border-box; }
 .tseek-canvas { display: block; width: 100%; background: rgba(255,255,255,0.03); border-bottom: 1px solid #1b3327; }
 .tseek-playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: #63e6a4; box-shadow: 0 0 6px #63e6a4; pointer-events: none; transform: translateX(-1px); z-index: 5; }
 

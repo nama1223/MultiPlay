@@ -8,6 +8,8 @@ interface Props {
   sections: Section[]
   mode: AppMode
   activeSectionId: string | null
+  /** 再生モードの範囲選択: 終了マーカーのID（null = 未選択） */
+  rangeEndId?: string | null
   onSeek: (time: number) => void
   onSectionUpdate: (id: string, updates: Partial<Section>) => void
   onSectionLabelClick: (id: string) => void
@@ -26,7 +28,7 @@ const ZOOM_LEVELS = [1, 1.5, 2, 3, 4]
  * ラベル列は固定で、波形列だけがズーム（＋/−）と横スクロールの対象。
  * 再生中、再生ヘッドが見える範囲から出たら横スクロールを追いつかせる。
  */
-export function TrackSeekBar({ currentTime, duration, sections, mode, activeSectionId, onSeek, onSectionUpdate, onSectionLabelClick }: Props) {
+export function TrackSeekBar({ currentTime, duration, sections, mode, activeSectionId, rangeEndId, onSeek, onSectionUpdate, onSectionLabelClick }: Props) {
   const waveRef = useRef<HTMLDivElement>(null)
   const hscrollRef = useRef<HTMLDivElement>(null)
   const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([])
@@ -45,6 +47,21 @@ export function TrackSeekBar({ currentTime, duration, sections, mode, activeSect
   const sorted = [...sections].sort((a, b) => a.startTime - b.startTime)
   const endOf = (i: number) => (i + 1 < sorted.length ? sorted[i + 1].startTime : duration)
   const safeDur = Math.max(duration, 0.001)
+
+  // 再生モードで選択中の実効範囲（開始マーカーの開始〜実効終了）をレーン領域に
+  // 半透明で塗る。終了マーカー未選択なら開始マーカー自身の区間が実効範囲。
+  // 位置は本体（ズーム幅）に対する割合で置くので、ズーム・スクロールに追随する
+  const activeIdx = mode === 'play' && activeSectionId
+    ? sorted.findIndex(s => s.id === activeSectionId) : -1
+  let rangeOverlay: { start: number; end: number; color: string } | null = null
+  if (activeIdx >= 0) {
+    let eIdx = activeIdx
+    if (rangeEndId) {
+      const ri = sorted.findIndex(s => s.id === rangeEndId)
+      if (ri > activeIdx) eIdx = ri
+    }
+    rangeOverlay = { start: sorted[activeIdx].startTime, end: endOf(eIdx), color: sorted[activeIdx].color }
+  }
 
   // ── ズーム ──
   const [zoomIdx, setZoomIdx] = useState(0)
@@ -285,6 +302,20 @@ export function TrackSeekBar({ currentTime, duration, sections, mode, activeSect
                 ))}
                 <div className="tseek-playhead" style={{ left: `${playFrac * 100}%` }} />
               </div>
+
+              {/* 選択中の実効範囲をレーン領域に半透明で塗る（操作は透過させる） */}
+              {rangeOverlay && (
+                <div
+                  className="tseek-range"
+                  style={{
+                    left: `${(rangeOverlay.start / safeDur) * 100}%`,
+                    width: `${Math.max(0, (rangeOverlay.end - rangeOverlay.start) / safeDur) * 100}%`,
+                    top: STRIP_H,
+                    height: lanes.length * LANE_H,
+                    background: `${rangeOverlay.color}33`,
+                  }}
+                />
+              )}
 
               {/* 冒頭（0秒）と最終（duration）の位置を示す太線（ズーム座標に追随） */}
               <div className="tseek-edge start" />

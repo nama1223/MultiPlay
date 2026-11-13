@@ -629,7 +629,7 @@
   padding: 2px 7px;
 }
 
-/* 開始行の右端コントロール（ループ・DL・再生） */
+/* 開始行の右端コントロール（範囲DL・ループ・再生） */
 .section-item-controls {
   display: inline-flex;
   align-items: center;

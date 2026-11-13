@@ -118,11 +118,16 @@ export default function App() {
 
   // マーカー選択の単一入口: 別のマーカーを選んだら、その場で範囲選択を解除し、
   // 武装中の範囲も解除する（表示と監視を常に一致させる）。
-  // 同じマーカーの再タップでは選択を維持し、範囲もそのまま残す
+  // 同じマーカーの再タップ: 範囲選択中なら終了だけを外して単体選択へ戻す
+  // （開始マーカーの選択自体とループは維持。実効範囲が変わるので武装は解除）。
+  // 範囲未選択の単体状態での再タップでは何も変えない
   const selectMarker = useCallback((id: string | null) => {
     if (id !== activeSectionIdRef.current) {
       applyRangeEnd(null)
       applyRangeLoop(false)
+      clearRange()
+    } else if (id != null && rangeEndIdRef.current != null) {
+      applyRangeEnd(null)
       clearRange()
     }
     activeSectionIdRef.current = id
@@ -607,6 +612,7 @@ export default function App() {
                 sections={sections}
                 mode={mode}
                 activeSectionId={activeSectionId}
+                rangeEndId={rangeEndId}
                 onSeek={seek}
                 onSectionUpdate={updateSection}
                 onSectionLabelClick={handleSectionLabelClick}

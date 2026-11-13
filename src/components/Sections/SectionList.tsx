@@ -21,7 +21,7 @@ interface Props {
   onToggleRangeLoop?: () => void
   /** 開始行の再生ボタン（範囲再生の唯一の入口） */
   onPlayRange?: () => void
-  /** 開始行の [DL] ボタン（現在の実効範囲を MP3 で切り取る） */
+  /** 開始行の [範囲DL] ボタン（現在の実効範囲を MP3 で切り取る） */
   onDownloadRange?: () => Promise<void>
   onUpdate: (id: string, updates: Partial<Section>) => void
   onDelete: (id: string) => void
