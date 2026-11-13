@@ -1,3 +1,5 @@
+import { fetchAudioBuffer } from './multiplay/audioCache'
+
 export interface TrackDef {
   id: string
   name: string
@@ -134,9 +136,12 @@ export class MultiTrackEngine {
     this.tracks = []
     let done = 0
     for (const def of defs) {
-      const res = await fetch(resolveUrl(def.url))
-      if (!res.ok) throw new Error(`音声の取得に失敗: ${def.name} (${res.status})`)
-      const ab = await res.arrayBuffer()
+      let ab: ArrayBuffer
+      try {
+        ab = await fetchAudioBuffer(resolveUrl(def.url))
+      } catch (e) {
+        throw new Error(`音声の取得に失敗: ${def.name} (${e instanceof Error ? e.message : String(e)})`)
+      }
       const buffer = await ctx.decodeAudioData(ab)
       const gainNode = ctx.createGain()
       gainNode.gain.value = def.gain ?? 1

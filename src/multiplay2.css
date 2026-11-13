@@ -1,8 +1,47 @@
 /* MultiPlay 追加分のスタイル（RecPlay のデザイン言語・緑系パレットに合わせる） */
 .change-btn { background: #1d4a34; border: 1px solid #2a5a44; border-radius: 10px; padding: 6px 12px; color: #a9d9bd; font-size: 12px; }
 .change-btn:active { background: #256b47; }
-.track-mixer { margin: 10px 10px 0; border: 1px solid #2a5a44; border-radius: 10px; background: #17362a; overflow: hidden; }
-.track-mixer-title { font-size: 12px; color: #82b294; padding: 8px 12px 4px; letter-spacing: 0.4px; }
+.track-mixer { margin: 10px 10px 0; border: 1px solid #2a5a44; border-radius: 10px; background: #17362a; overflow: hidden; flex-shrink: 0; }
+.track-mixer-title { font-size: 12px; color: #82b294; letter-spacing: 0.4px; }
+.track-mixer-head { display: flex; align-items: center; justify-content: space-between; width: 100%; background: none; border: none; padding: 8px 12px 6px; cursor: pointer; text-align: left; }
+.track-mixer-chevron { font-size: 11px; color: #a9d9bd; background: #1d4a34; border: 1px solid #2a5a44; border-radius: 8px; padding: 3px 8px; flex-shrink: 0; }
+
+/* 読み込み中オーバーレイ＋ゲージ */
+.player { position: relative; }
+.mp-loading-overlay { position: absolute; inset: 0; z-index: 40; background: rgba(10, 20, 14, 0.82); display: flex; align-items: center; justify-content: center; padding: 20px; }
+.mp-loading-box { width: min(420px, 92%); background: #17362a; border: 1px solid #2a5a44; border-radius: 12px; padding: 20px 18px; text-align: center; }
+.mp-loading-title { font-size: 16px; font-weight: 700; color: #eeeeff; margin-bottom: 6px; }
+.mp-loading-phase { font-size: 13px; color: #a9d9bd; margin-bottom: 12px; }
+.mp-loading-note { font-size: 11px; color: #82b294; margin-top: 10px; }
+.mp-gauge { height: 10px; background: #0d2016; border: 1px solid #2a5a44; border-radius: 6px; overflow: hidden; position: relative; }
+.mp-gauge-fill { height: 100%; background: linear-gradient(90deg, #16a34a, #63e6a4); border-radius: 6px; transition: width 0.25s ease; }
+.mp-gauge-fill.indeterminate { position: absolute; width: 40%; animation: mp-gauge-slide 1.1s ease-in-out infinite alternate; }
+@keyframes mp-gauge-slide { from { left: 0; } to { left: 60%; } }
+
+/* 波形エリアの境界ドラッグ（RecPlay から移植、緑系に調整） */
+.tseek-scroll { overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
+.seekbar-resize-handle { height: 22px; background: #17362a; border-top: 1px solid #2a5a44; display: flex; align-items: stretch; flex-shrink: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
+.resize-drag-zone { flex: 1; cursor: ns-resize; touch-action: none; display: flex; align-items: center; justify-content: center; }
+.resize-drag-zone::after { content: '⋯'; font-size: 16px; color: #4f7a5f; letter-spacing: 4px; }
+.resize-drag-zone:hover::after { color: #63e6a4; }
+.resize-drag-zone:active::after { color: #b8ffd9; }
+.resize-extreme-btn { width: 15%; min-width: 64px; background: #1d4a34; color: #a9d9bd; font-size: 10px; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer; }
+.resize-extreme-btn:active { background: #256b47; }
+
+/* 曲データ編集パネル（プレイヤー内） */
+.song-edit { margin: 10px 10px 0; border: 1px solid #2a5a44; border-radius: 10px; background: #17362a; overflow: hidden; flex-shrink: 0; }
+.song-edit-body { padding: 4px 12px 12px; max-height: 52vh; overflow-y: auto; }
+.mp-admin-note { font-size: 11px; color: #82b294; margin: 8px 0 0; }
+
+/* 音声キャッシュ（設定画面） */
+.cache-panel { margin: 10px; border: 1px solid #2a5a44; border-radius: 10px; background: #17362a; padding: 12px; }
+.cache-panel-title { font-size: 13px; font-weight: 700; color: #63e6a4; margin-bottom: 6px; }
+.cache-panel-text { font-size: 12px; color: #a9d9bd; margin: 0 0 6px; line-height: 1.6; }
+
+/* 曲一覧での新規作成（管理者） */
+.file-create { margin: 18px 10px 0; border: 1px dashed #2a5a44; border-radius: 10px; padding: 12px; background: rgba(23, 54, 42, 0.5); }
+.file-create-title { font-size: 13px; font-weight: 700; color: #63e6a4; margin-bottom: 4px; }
+.file-create-note { font-size: 11px; color: #82b294; margin: 4px 0 0; }
 .track-row { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-bottom: 1px solid #1b3327; min-height: 40px; }
 .track-row:last-child { border-bottom: none; }
 .track-name { font-size: 14px; font-weight: 600; color: #eeeeff; min-width: 5.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

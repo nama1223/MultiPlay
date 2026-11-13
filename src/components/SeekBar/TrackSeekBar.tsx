@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Section, AppMode } from '../../types'
-import { engine } from '../../multiplay/bridge'
+import { engine, getCurrentManifest } from '../../multiplay/bridge'
 
 interface Props {
   currentTime: number
@@ -15,7 +15,9 @@ interface Props {
 
 const LABEL_W = 64
 const STRIP_H = 22
-const LANE_H = 46
+const LANE_H = 30
+const MIN_VIEW_H = STRIP_H + LANE_H
+const maxViewH = () => Math.round(window.innerHeight * 0.72)
 
 /**
  * MultiPlay 用シークバー。RecPlay の SeekBar の場所に置き、
@@ -26,16 +28,26 @@ export function TrackSeekBar({ currentTime, duration, sections, mode, activeSect
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([])
   const drawKeyRef = useRef('')
-  const tracks = engine.tracks
+  // レーン = 曲データ（manifest）のトラックが土台。デコード済みのトラックはエンジン側の
+  // 実ピーク・実長を使い、未着のトラックは曲データに保存されたピークで先行表示する。
+  const manifest = getCurrentManifest()
+  const baseTracks = manifest?.tracks ?? []
+  const defs = baseTracks.length ? baseTracks : engine.tracks.map(t => ({ id: t.def.id, name: t.def.name, offsetMs: t.def.offsetMs }))
+  const lanes = defs.map(def => {
+    const eng = engine.tracks.find(t => t.def.id === def.id)
+    if (eng) return { id: def.id, name: def.name, peaks: eng.peaks, offsetMs: eng.def.offsetMs ?? 0, dur: eng.buffer.duration }
+    const mt = baseTracks.find(t => t.id === def.id)
+    return { id: def.id, name: def.name, peaks: mt?.peaks ?? [], offsetMs: mt?.offsetMs ?? def.offsetMs ?? 0, dur: mt?.durationSec ?? 0 }
+  })
   const sorted = [...sections].sort((a, b) => a.startTime - b.startTime)
   const endOf = (i: number) => (i + 1 < sorted.length ? sorted[i + 1].startTime : duration)
   const safeDur = Math.max(duration, 0.001)
 
   useEffect(() => {
-    const key = `${tracks.length}|${duration}|${tracks.map(t => t.buffer.duration).join(',')}`
+    const key = `${lanes.length}|${duration}|${lanes.map(l => `${l.peaks.length}:${l.dur}`).join(',')}`
     if (drawKeyRef.current === key) return
     drawKeyRef.current = key
-    tracks.forEach((t, i) => {
+    lanes.forEach((lane, i) => {
       const cv = canvasRefs.current[i]
       if (!cv || duration <= 0) return
       const W = 1000, H = LANE_H
@@ -43,15 +55,16 @@ export function TrackSeekBar({ currentTime, duration, sections, mode, activeSect
       const g = cv.getContext('2d')
       if (!g) return
       g.clearRect(0, 0, W, H)
-      const off = (t.def.offsetMs ?? 0) / 1000
+      if (!lane.peaks.length || lane.dur <= 0) return
+      const off = lane.offsetMs / 1000
       const x0 = (off / duration) * W
-      const w = Math.max(2, (t.buffer.duration / duration) * W)
+      const w = Math.max(2, (lane.dur / duration) * W)
       g.fillStyle = '#63e6a4'
       g.globalAlpha = 0.8
-      const n = t.peaks.length
+      const n = lane.peaks.length
       for (let b = 0; b < n; b++) {
         const x = x0 + (b / n) * w
-        const h = Math.max(1, t.peaks[b] * (H - 8))
+        const h = Math.max(1, lane.peaks[b] * (H - 8))
         g.fillRect(x, (H - h) / 2, Math.max(1, w / n - 0.5), h)
       }
       g.globalAlpha = 1
@@ -96,15 +109,35 @@ export function TrackSeekBar({ currentTime, duration, sections, mode, activeSect
 
   const playFrac = duration > 0 ? currentTime / duration : 0
 
+  // ── 境界ドラッグ（RecPlay のシークバー高さ調整を移植） ──
+  const contentH = STRIP_H + lanes.length * LANE_H
+  const [viewH, setViewH] = useState<number | null>(null)
+  const effH = viewH ?? Math.min(contentH, Math.round(window.innerHeight * 0.45))
+  const resizeDrag = useRef<{ startY: number; startH: number } | null>(null)
+  const handleResizeStart = (e: React.PointerEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    resizeDrag.current = { startY: e.clientY, startH: effH }
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  }
+  const handleResizeMove = (e: React.PointerEvent) => {
+    if (!resizeDrag.current) return
+    e.preventDefault()
+    const dy = e.clientY - resizeDrag.current.startY
+    setViewH(Math.max(MIN_VIEW_H, Math.min(maxViewH(), resizeDrag.current.startH + dy)))
+  }
+  const handleResizeEnd = () => { resizeDrag.current = null }
+
   return (
     <div className="seekbar-container tseek">
+      <div className="tseek-scroll" style={{ height: effH }}>
       <div
         className="tseek-body"
         ref={wrapRef}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endScrub}
-        style={{ height: STRIP_H + tracks.length * LANE_H }}
+        style={{ height: contentH }}
       >
         {/* 区間（マーカー）の帯 */}
         <div className="tseek-stripbands" style={{ left: LABEL_W, height: STRIP_H }}>
@@ -134,19 +167,40 @@ export function TrackSeekBar({ currentTime, duration, sections, mode, activeSect
         </div>
 
         {/* トラック名ラベル */}
-        {tracks.map((t, i) => (
-          <span key={t.def.id} className="tseek-lanelabel" style={{ top: STRIP_H + i * LANE_H, height: LANE_H, width: LABEL_W }}>
-            {t.def.name}
+        {lanes.map((lane, i) => (
+          <span key={lane.id} className="tseek-lanelabel" style={{ top: STRIP_H + i * LANE_H, height: LANE_H, width: LABEL_W }}>
+            {lane.name}
           </span>
         ))}
 
         {/* 波形レーン */}
         <div className="tseek-canvascol" style={{ marginLeft: LABEL_W, top: STRIP_H }}>
-          {tracks.map((t, i) => (
-            <canvas key={t.def.id} ref={el => { canvasRefs.current[i] = el }} className="tseek-canvas" style={{ height: LANE_H }} />
+          {lanes.map((lane, i) => (
+            <canvas key={lane.id} ref={el => { canvasRefs.current[i] = el }} className="tseek-canvas" style={{ height: LANE_H }} />
           ))}
           <div className="tseek-playhead" style={{ left: `${playFrac * 100}%` }} />
         </div>
+      </div>
+      </div>
+      <div className="seekbar-resize-handle">
+        <button
+          className="resize-extreme-btn"
+          onClick={() => setViewH(MIN_VIEW_H)}
+          title="波形エリアを最小にする"
+        >▼ 最小</button>
+        <div
+          className="resize-drag-zone"
+          onPointerDown={handleResizeStart}
+          onPointerMove={handleResizeMove}
+          onPointerUp={handleResizeEnd}
+          onPointerCancel={handleResizeEnd}
+          title="ドラッグで波形エリアの高さを調整"
+        />
+        <button
+          className="resize-extreme-btn"
+          onClick={() => setViewH(Math.min(contentH, maxViewH()))}
+          title="波形エリアを全トラック分まで広げる"
+        >▲ 最大</button>
       </div>
     </div>
   )

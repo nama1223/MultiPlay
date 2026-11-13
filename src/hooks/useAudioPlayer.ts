@@ -8,6 +8,14 @@ const RATE_MIN = 0.5
 const RATE_MAX = 2.0
 export const RATE_STEP = 0.05
 
+export interface LoadState {
+  status: 'idle' | 'loading' | 'ready' | 'error'
+  phase: string
+  done: number
+  total: number
+  error: string
+}
+
 /**
  * RecPlay の useAudioPlayer と同じインターフェースを、多トラックエンジンで実装する。
  * loadUrl には曲IDを渡す（manifest を取得して全トラックを読み込む）。
@@ -20,6 +28,8 @@ export function useAudioPlayer() {
   const [src, setSrc] = useState<string | null>(null)
   const [playbackRate, setPlaybackRate] = useState(1.0)
   const playbackRateRef = useRef(1.0)
+  const [loadState, setLoadState] = useState<LoadState>({ status: 'idle', phase: '', done: 0, total: 0, error: '' })
+  const loadReadyRef = useRef(false)
 
   const sectionEndRef = useRef<number | null>(null)
   const excludedZonesRef = useRef<ExcludedZone[]>([])
@@ -50,16 +60,19 @@ export function useAudioPlayer() {
   }, [])
 
   const togglePlayPause = useCallback(() => {
+    if (!loadReadyRef.current) return
     engine.toggle()
     setIsPlaying(engine.playing)
   }, [])
 
   const seek = useCallback((time: number) => {
+    if (!loadReadyRef.current) return
     engine.seek(time)
     setCurrentTime(engine.position())
   }, [])
 
   const skip = useCallback((delta: number) => {
+    if (!loadReadyRef.current) return
     // 除外区間を考慮したスキップ（元の実装と同じ計算）
     if (!skipExcludedRef.current || excludedZonesRef.current.length === 0) {
       engine.seek(engine.position() + delta)
@@ -102,6 +115,7 @@ export function useAudioPlayer() {
   }, [])
 
   const playSection = useCallback((startTime: number, endTime: number) => {
+    if (!loadReadyRef.current) return
     sectionEndRef.current = endTime
     engine.play(startTime)
     setIsPlaying(true)
@@ -116,17 +130,28 @@ export function useAudioPlayer() {
     setCurrentTime(0)
     setDuration(0)
     sectionEndRef.current = null
+    loadReadyRef.current = false
+    setLoadState({ status: 'loading', phase: '曲データを取得中…', done: 0, total: 0, error: '' })
     ;(async () => {
       try {
         const res = await fetch(songUrl(songId))
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const manifest = (await res.json()) as MpSongManifest
         setCurrentManifest(manifest)
-        await engine.load(manifest.tracks, resolveTrackUrl)
+        // 波形ピーク付きの曲データなら、総時間を先に表示する（波形の先行表示と対）
+        const est = manifest.tracks.reduce((m, t) => Math.max(m, (t.offsetMs ?? 0) / 1000 + (t.durationSec ?? 0)), 0)
+        if (est > 0) setDuration(est)
+        setLoadState({ status: 'loading', phase: '音声を読み込み中…', done: 0, total: manifest.tracks.length, error: '' })
+        await engine.load(manifest.tracks, resolveTrackUrl, (done, total) => {
+          setLoadState({ status: 'loading', phase: '音声を読み込み中…', done, total, error: '' })
+        })
         engine.setRate(playbackRateRef.current)
         setDuration(engine.duration)
+        loadReadyRef.current = true
+        setLoadState({ status: 'ready', phase: '', done: manifest.tracks.length, total: manifest.tracks.length, error: '' })
       } catch (e) {
         console.error('曲の読み込みに失敗', e)
+        setLoadState({ status: 'error', phase: '', done: 0, total: 0, error: e instanceof Error ? e.message : String(e) })
       }
     })()
   }, [])
@@ -160,6 +185,7 @@ export function useAudioPlayer() {
     playSection,
     loadFile,
     loadUrl,
+    loadState,
     setExcludedZones,
     setSkipExcluded,
     changePlaybackRate,

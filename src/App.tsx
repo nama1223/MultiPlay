@@ -13,6 +13,8 @@ import { AuthPage } from './components/AuthPage'
 import { FileListPage } from './components/FileListPage'
 import { AdminPage } from './components/AdminPage'
 import { TrackMixer } from './components/TrackMixer'
+import { SongEditPanel } from './components/SongEditPanel'
+import { AudioCachePanel } from './components/AudioCachePanel'
 import { formatTime } from './utils/timeFormat'
 import { AppMode, Section } from './types'
 import { buildAppShareUrl, indexUrl } from './config'
@@ -59,8 +61,9 @@ export default function App() {
     audioRef, currentTime, duration, isPlaying, src,
     togglePlayPause, seek, skip, playSection,
     loadUrl, setExcludedZones, setSkipExcluded,
-    playbackRate, changePlaybackRate,
+    playbackRate, changePlaybackRate, loadState,
   } = useAudioPlayer()
+  const [mixerKey, setMixerKey] = useState(0)
 
   const { sections, addSection, updateSection, deleteSection, toggleExclude, importSections, reorderSections, undo, redo, undoCount, redoCount } = useSections()
   const { settings, updateSettings } = useSettings()
@@ -153,6 +156,21 @@ export default function App() {
     importSections([])
   }
 
+  // 曲データ編集の保存後: 新しい構成でプレイヤーを読み込み直す
+  const handleSongSaved = (newTitle: string) => {
+    setFileName(newTitle)
+    setMixerKey(k => k + 1)
+    if (fileKey) loadUrl(fileKey)
+  }
+
+  const handleSongDeleted = () => {
+    setFileLoaded(false)
+    setFileName('')
+    setFileKey(null)
+    importSections([])
+    setScreen('files')
+  }
+
   const handleSectionLabelClick = (id: string) => {
     setActiveSectionId(id)
     setScrollTarget((prev) => ({ id, seq: (prev?.seq ?? 0) + 1 }))
@@ -227,6 +245,7 @@ export default function App() {
           org={org}
           onFileSelect={handleFileSelect}
           onLogout={handleLogout}
+          isAdmin={isAdmin}
         />
       )}
 
@@ -283,6 +302,34 @@ export default function App() {
                 </div>
               </div>
 
+              {(loadState.status === 'loading' || loadState.status === 'error') && (
+                <div className="mp-loading-overlay">
+                  <div className="mp-loading-box">
+                    {loadState.status === 'loading' ? (
+                      <>
+                        <div className="mp-loading-title">読み込み中…</div>
+                        <div className="mp-loading-phase">
+                          {loadState.phase}
+                          {loadState.total > 0 && `（${loadState.done} / ${loadState.total} トラック）`}
+                        </div>
+                        <div className="mp-gauge">
+                          {loadState.total > 0
+                            ? <div className="mp-gauge-fill" style={{ width: `${Math.round((loadState.done / loadState.total) * 100)}%` }} />
+                            : <div className="mp-gauge-fill indeterminate" />}
+                        </div>
+                        <div className="mp-loading-note">波形と音声の準備が終わるまで、再生・操作はできません</div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="mp-loading-title">読み込みに失敗しました</div>
+                        <div className="mp-loading-phase">{loadState.error}</div>
+                        <button className="mp-btn" onClick={() => setScreen('files')}>曲一覧へ戻る</button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <TrackSeekBar
                 currentTime={currentTime}
                 duration={duration}
@@ -314,7 +361,15 @@ export default function App() {
               )}
 
               {mode !== 'settings' && fileKey && (
-                <TrackMixer songId={fileKey} />
+                <TrackMixer key={`${fileKey}:${mixerKey}`} songId={fileKey} />
+              )}
+
+              {mode === 'edit' && fileKey && (
+                <SongEditPanel
+                  songId={fileKey}
+                  onSaved={handleSongSaved}
+                  onDeleted={handleSongDeleted}
+                />
               )}
 
               {mode !== 'settings' && (
@@ -344,7 +399,10 @@ export default function App() {
               )}
 
               {mode === 'settings' && (
-                <SettingsPanel settings={settings} onUpdate={updateSettings} />
+                <>
+                  <SettingsPanel settings={settings} onUpdate={updateSettings} />
+                  <AudioCachePanel />
+                </>
               )}
             </div>
           )}

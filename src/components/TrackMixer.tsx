@@ -11,6 +11,11 @@ import type { MpSongManifest } from '../multiplay/types'
 export function TrackMixer({ songId }: { songId: string }) {
   const [manifest, setManifest] = useState<MpSongManifest | null>(null)
   const [mix, setMix] = useState<Record<string, MixState>>({})
+  const [open, setOpen] = useState(() => localStorage.getItem('mp_mixer_open') !== '0')
+  const toggleOpen = () => setOpen(v => {
+    localStorage.setItem('mp_mixer_open', v ? '0' : '1')
+    return !v
+  })
 
   useEffect(() => {
     let alive = true
@@ -38,8 +43,11 @@ export function TrackMixer({ songId }: { songId: string }) {
 
   return (
     <div className="track-mixer">
-      <div className="track-mixer-title">トラック音量</div>
-      {manifest.tracks.map(t => {
+      <button className="track-mixer-head" onClick={toggleOpen} aria-expanded={open}>
+        <span className="track-mixer-title">トラック音量</span>
+        <span className="track-mixer-chevron">{open ? '▲ 畳む' : '▼ 開く'}</span>
+      </button>
+      {open && manifest.tracks.map(t => {
         const m = mix[t.id] ?? { volume: 1, mute: false, solo: false }
         return (
           <div key={t.id} className="track-row">
