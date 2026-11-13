@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  fetchIndexFresh, fetchSongFresh, uploadAudio, deleteAudioByUrl,
+  fetchIndexFresh, fetchSongFresh, uploadAudio, deleteAudioByUrl, deleteSongCompletely,
   saveSongManifest, saveIndex,
 } from '../multiplay/api'
 import { engine, getCurrentManifest, setCurrentManifest, getCurrentMix } from '../multiplay/bridge'
@@ -190,7 +190,12 @@ export function SongEditPanel({ songId, isPlaying, onSaved, onTitleSaved, onDele
     if (!armDelete) { setArmDelete(true); return }
     setBusy(true)
     try {
-      for (const t of song.tracks) await deleteAudioByUrl(t.url)
+      // manifest と音声の実体をサーバー側で完全削除する（旧方式は manifest が残って孤立した）
+      try {
+        await deleteSongCompletely(song.id)
+      } catch {
+        for (const t of song.tracks) await deleteAudioByUrl(t.url)
+      }
       const idx = await fetchIndexFresh()
       await saveIndex({ groups: idx.groups.map(g => ({ ...g, songs: g.songs.filter(s => s.id !== song.id) })) })
       onDeleted()

@@ -181,3 +181,13 @@
 .mp-admin .mp-song-arrow { color: #4f7a5f; font-size: 1.2rem; }
 .mp-admin .mp-msg { padding: 24px 8px; color: #a0a0b0; }
 .mp-admin .mp-error { color: #ff8fa3; }
+
+/* ── Admin: group list & storage ── */
+.mp-group-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border: 1px solid #2a5a44; border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; background: #17362a; }
+.mp-group-row .mp-group-name { flex: 1; font-weight: 600; color: #eeeeff; font-size: 14px; min-width: 100px; }
+.mp-group-row .mp-input.grow { flex: 1; min-width: 120px; }
+.mp-storage-total { font-size: 14px; color: #eeeeff; margin: 8px 0; }
+.mp-storage-group { border: 1px solid #2a5a44; border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; background: #132a20; }
+.mp-storage-group-head { display: flex; justify-content: space-between; font-weight: 600; color: #eeeeff; font-size: 13px; margin-bottom: 4px; }
+.mp-storage-song { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: #cfe8d8; padding: 2px 0 2px 12px; }
+.mp-orphan-key { word-break: break-all; }

@@ -1,5 +1,5 @@
 import { API_BASE, FIXTURES, indexUrl, songUrl } from '../config'
-import type { MpIndex, MpSongManifest } from '../multiplay/types'
+import type { MpIndex, MpSongManifest, MpStorageReport } from '../multiplay/types'
 
 const TOKEN_KEY = 'mp_admin_token'
 
@@ -68,6 +68,45 @@ export function saveSongManifest(manifest: MpSongManifest): Promise<void> {
 
 export function saveIndex(index: MpIndex): Promise<void> {
   return putObject('index.json', JSON.stringify(index, null, 1), 'application/json')
+}
+
+async function adminFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  if (FIXTURES) throw new Error('フィクスチャモードではこの操作はできません')
+  const r = await fetch(`${API_BASE}${path}`, { ...init, headers: adminHeaders((init.headers as Record<string, string>) ?? {}) })
+  if (r.status === 401) throw new Error('合言葉が違います')
+  if (!r.ok) throw new Error(`操作に失敗 (HTTP ${r.status})`)
+  return r
+}
+
+/** 曲を複製する。音声は Worker 側で実体までコピーされる（参照共有ではない） */
+export async function duplicateSong(id: string): Promise<{ id: string; title: string; trackCount: number }> {
+  const r = await adminFetch(`/api/admin/song/${encodeURIComponent(id)}/duplicate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  })
+  return r.json()
+}
+
+/** 曲を完全削除する（manifest と音声ファイルの実体を全部消す） */
+export async function deleteSongCompletely(id: string): Promise<void> {
+  await adminFetch(`/api/admin/song/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+/** 容量集計を B2 の実データから取得する */
+export async function fetchStorageReport(): Promise<MpStorageReport> {
+  const r = await adminFetch('/api/admin/storage')
+  return r.json()
+}
+
+/** 孤立ファイルを掃除する（サーバー側でも孤立かどうか再検証される） */
+export async function cleanupOrphans(req: { keys?: string[]; songIds?: string[] }): Promise<{ deleted: string[] }> {
+  const r = await adminFetch('/api/admin/cleanup-orphans', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  })
+  return r.json()
 }
 
 /** 合言葉が正しいかを、軽い書き込みなしに確認する（401 が返る経路を叩く） */

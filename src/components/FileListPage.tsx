@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
-import { indexUrl } from '../config'
+import { useCallback, useEffect, useState } from 'react'
 import { OrgInfo } from '../hooks/useOrgAuth'
-import { fetchIndexFresh, saveIndex, saveSongManifest } from '../multiplay/api'
-import type { MpIndex, MpSongManifest, MpSongSummary } from '../multiplay/types'
+import { deleteSongCompletely, duplicateSong, fetchIndexFresh, fetchSongFresh, saveIndex, saveSongManifest } from '../multiplay/api'
+import type { MpSongManifest, MpSongSummary } from '../multiplay/types'
+import { ConfirmModal } from './ConfirmModal'
 
 const newId = (p: string) => `${p}${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`
 
@@ -17,6 +17,7 @@ interface Props {
 /**
  * 団体の曲一覧。RecPlay の FileListPage の構成（ヘッダー＋カード一覧）をそのまま使い、
  * 中身を MultiPlay の曲（多重録音）に差し替えたもの。
+ * 管理者には曲ごとの「名前変更／複製／削除」も出す（削除は音声の実体まで消える）。
  */
 export function FileListPage({ org, onFileSelect, onLogout, isAdmin = false }: Props) {
   const [songs, setSongs] = useState<MpSongSummary[]>([])
@@ -25,6 +26,27 @@ export function FileListPage({ org, onFileSelect, onLogout, isAdmin = false }: P
   const [newTitle, setNewTitle] = useState('')
   const [creating, setCreating] = useState(false)
   const [createMsg, setCreateMsg] = useState('')
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameText, setRenameText] = useState('')
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<MpSongSummary | null>(null)
+  const [actionMsg, setActionMsg] = useState('')
+
+  const reload = useCallback(async () => {
+    const idx = await fetchIndexFresh()
+    const g = idx.groups.find(x => x.id === org.id)
+    setSongs(g?.songs ?? [])
+    return idx
+  }, [org.id])
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    reload()
+      .then(() => { if (alive) setLoading(false) })
+      .catch(e => { if (alive) { setError(`曲の一覧を取得できませんでした（${e.message}）`); setLoading(false) } })
+    return () => { alive = false }
+  }, [reload])
 
   const createSong = async () => {
     const title = newTitle.trim()
@@ -44,20 +66,53 @@ export function FileListPage({ org, onFileSelect, onLogout, isAdmin = false }: P
     }
   }
 
-  useEffect(() => {
-    let alive = true
-    setLoading(true)
-    fetch(`${indexUrl()}${indexUrl().includes('?') ? '&' : '?'}v=${Date.now()}`, { cache: 'no-store' })
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
-      .then((j: MpIndex) => {
-        if (!alive) return
-        const g = j.groups.find(x => x.id === org.id)
-        setSongs(g?.songs ?? [])
-        setLoading(false)
-      })
-      .catch(e => { if (alive) { setError(`曲の一覧を取得できませんでした（${e.message}）`); setLoading(false) } })
-    return () => { alive = false }
-  }, [org.id])
+  const saveRename = async (s: MpSongSummary) => {
+    const title = renameText.trim()
+    if (!title || busyId) return
+    setBusyId(s.id)
+    setActionMsg('')
+    try {
+      const m = await fetchSongFresh(s.id)
+      m.title = title
+      await saveSongManifest(m)
+      const idx = await fetchIndexFresh()
+      await saveIndex({ groups: idx.groups.map(g => g.id === org.id ? { ...g, songs: g.songs.map(x => x.id === s.id ? { ...x, title } : x) } : g) })
+      setSongs(prev => prev.map(x => x.id === s.id ? { ...x, title } : x))
+      setRenamingId(null)
+    } catch (e) { setActionMsg(e instanceof Error ? e.message : String(e)) }
+    setBusyId(null)
+  }
+
+  const doDuplicate = async (s: MpSongSummary) => {
+    if (busyId) return
+    setBusyId(s.id)
+    setActionMsg('')
+    try {
+      const r = await duplicateSong(s.id)
+      const idx = await fetchIndexFresh()
+      const next = { groups: idx.groups.map(g => g.id === org.id ? { ...g, songs: [...g.songs, { id: r.id, title: r.title, trackCount: r.trackCount }] } : g) }
+      await saveIndex(next)
+      const g = next.groups.find(x => x.id === org.id)
+      setSongs(g?.songs ?? [])
+      setActionMsg(`「${r.title}」を作成しました`)
+    } catch (e) { setActionMsg(e instanceof Error ? e.message : String(e)) }
+    setBusyId(null)
+  }
+
+  const doDelete = async () => {
+    const s = deleteTarget
+    if (!s || busyId) return
+    setBusyId(s.id)
+    setActionMsg('')
+    try {
+      await deleteSongCompletely(s.id)
+      const idx = await fetchIndexFresh()
+      await saveIndex({ groups: idx.groups.map(g => ({ ...g, songs: g.songs.filter(x => x.id !== s.id) })) })
+      setSongs(prev => prev.filter(x => x.id !== s.id))
+      setDeleteTarget(null)
+    } catch (e) { setActionMsg(e instanceof Error ? e.message : String(e)) }
+    setBusyId(null)
+  }
 
   return (
     <div className="file-list-page">
@@ -69,17 +124,47 @@ export function FileListPage({ org, onFileSelect, onLogout, isAdmin = false }: P
       <div className="file-list-body">
         {loading && <p className="hint-text">読み込み中...</p>}
         {error && <p className="error-text">{error}</p>}
+        {actionMsg && <p className="mp-admin-msg">{actionMsg}</p>}
         {!loading && !error && songs.length === 0 && (
           <p className="no-sections">まだ曲がありません</p>
         )}
         <div className="file-items">
           {songs.map(s => (
-            <button key={s.id} className="file-item-btn" onClick={() => onFileSelect(s.id, s.id, s.title)}>
-              <span className="file-item-name">🎵 {s.title}</span>
-              {typeof s.trackCount === 'number' && (
-                <span className="file-item-meta">{s.trackCount} トラック</span>
+            <div key={s.id} className="file-item-row">
+              {renamingId === s.id ? (
+                <div className="file-item-rename">
+                  <input
+                    className="mp-input grow"
+                    value={renameText}
+                    onChange={e => setRenameText(e.target.value)}
+                    placeholder="曲の名前"
+                    autoFocus
+                  />
+                  <button className="mp-btn tiny" disabled={busyId === s.id || !renameText.trim()} onClick={() => saveRename(s)}>
+                    {busyId === s.id ? '保存中…' : '保存'}
+                  </button>
+                  <button className="mp-btn tiny sub" disabled={busyId === s.id} onClick={() => setRenamingId(null)}>キャンセル</button>
+                </div>
+              ) : (
+                <>
+                  <button className="file-item-btn" onClick={() => onFileSelect(s.id, s.id, s.title)}>
+                    <span className="file-item-name">🎵 {s.title}</span>
+                    {typeof s.trackCount === 'number' && (
+                      <span className="file-item-meta">{s.trackCount} トラック</span>
+                    )}
+                  </button>
+                  {isAdmin && (
+                    <div className="file-item-actions mp-song-actions">
+                      <button className="mp-btn tiny" disabled={busyId !== null} onClick={() => { setRenamingId(s.id); setRenameText(s.title) }}>名前変更</button>
+                      <button className="mp-btn tiny" disabled={busyId !== null} onClick={() => doDuplicate(s)}>
+                        {busyId === s.id ? '処理中…' : '複製'}
+                      </button>
+                      <button className="mp-btn tiny danger" disabled={busyId !== null} onClick={() => setDeleteTarget(s)}>削除</button>
+                    </div>
+                  )}
+                </>
               )}
-            </button>
+            </div>
           ))}
         </div>
 
@@ -102,6 +187,18 @@ export function FileListPage({ org, onFileSelect, onLogout, isAdmin = false }: P
           </div>
         )}
       </div>
+
+      {deleteTarget && (
+        <ConfirmModal
+          title="曲を削除しますか？"
+          confirmLabel="削除する"
+          busy={busyId === deleteTarget.id}
+          onConfirm={doDelete}
+          onCancel={() => setDeleteTarget(null)}
+        >
+          <p>「{deleteTarget.title}」を削除します。音声ファイルも含めて完全に消え、元に戻せません。</p>
+        </ConfirmModal>
+      )}
     </div>
   )
 }
