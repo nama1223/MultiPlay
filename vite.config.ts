@@ -18,7 +18,7 @@ export default defineConfig({
         short_name: 'MultiPlay',
         description: 'パート別に聴ける、多重録音プレーヤー',
         theme_color: '#101d15',
-        background_color: '#101d15',
+        background_color: '#862536',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '.',
