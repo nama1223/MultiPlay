@@ -18,6 +18,23 @@ body {
   overscroll-behavior: none;
 }
 
+/* 「引っ張ってリロード」対策: 主要なスクロール領域では、端までスクロールした時の
+   ジェスチャが外側へ伝わって PWA のプルリロードを発動させないようにする。
+   領域内の通常スクロールや、波形の横パンには影響しない */
+html {
+  overscroll-behavior: none;
+}
+.section-list,
+.file-list-body,
+.settings-scroll,
+.admin-body,
+.tseek-scroll,
+.tseek-hscroll,
+.track-mixer-body,
+.song-edit-body {
+  overscroll-behavior: none;
+}
+
 button {
   cursor: pointer;
   font-family: inherit;

@@ -60,7 +60,7 @@ function makeImpulseResponse(ctx: BaseAudioContext, seconds = 1.8, decay = 2.8):
   return buf
 }
 
-function encodeWav(buffer: AudioBuffer): Blob {
+export function encodeWav(buffer: AudioBuffer): Blob {
   const numCh = Math.min(2, buffer.numberOfChannels)
   const rate = buffer.sampleRate
   const len = buffer.length
@@ -360,8 +360,8 @@ export class MultiTrackEngine {
     }
   }
 
-  /** 現在のバランス・オフセット・リバーブで全体をオフライン書き出しして WAV を返す */
-  async renderMixdown(mix: Record<string, MixState>): Promise<Blob> {
+  /** 現在のバランス・オフセット・リバーブで全体をオフライン書き出しして AudioBuffer を返す */
+  async renderMixdownBuffer(mix: Record<string, MixState>): Promise<AudioBuffer> {
     const rate = 44100
     // 書き出しはバッファのタイムラインで計算する（伸縮中は元タイムライン ÷ テンポ）。
     // ロード中のバッファを使うので、適用中の速度・ピッチ維持がそのまま書き出される。
@@ -406,8 +406,12 @@ export class MultiTrackEngine {
       }
       dest += seg.end - seg.start
     }
-    const rendered = await off.startRendering()
-    return encodeWav(rendered)
+    return off.startRendering()
+  }
+
+  /** ミックスダウンを WAV で返す（従来経路） */
+  async renderMixdown(mix: Record<string, MixState>): Promise<Blob> {
+    return encodeWav(await this.renderMixdownBuffer(mix))
   }
 
   dispose() {

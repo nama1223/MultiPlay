@@ -1,6 +1,58 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Section } from '../../types'
 import { formatTime } from '../../utils/timeFormat'
+
+/**
+ * 時刻入力枠への「スクロール＆スワイプ」付け足し。
+ * - ホイール: 1ノッチ = 0.1秒（符号だけ見るのでトラックパッドでも暴走しない）
+ * - 横ドラッグ: 5px = 0.1秒。ポインターキャプチャで枠外へ出ても追い続け、
+ *   CSS の touch-action: none と合わせてページのスクロール/パンと競合させない。
+ * どちらも呼び出し側の adjust（= 既存のクランプ＋onUpdate 経路）にデルタを渡すだけ。
+ * タップだけなら従来どおりフォーカスして打てる（ドラッグ判定は移動が始まってから）。
+ */
+function useTimeScrub(adjust: (delta: number) => void) {
+  const ref = useRef<HTMLInputElement>(null)
+  const adjustRef = useRef(adjust)
+  adjustRef.current = adjust
+  const drag = useRef<{ lastX: number; rest: number } | null>(null)
+
+  // ホイールは React の onWheel だと passive で preventDefault できないため native で付ける
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      adjustRef.current(e.deltaY < 0 ? 0.1 : -0.1)
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
+  const pointerHandlers = {
+    onPointerDown: (e: React.PointerEvent<HTMLInputElement>) => {
+      if (e.button !== 0) return
+      drag.current = { lastX: e.clientX, rest: 0 }
+      e.currentTarget.setPointerCapture(e.pointerId)
+    },
+    onPointerMove: (e: React.PointerEvent<HTMLInputElement>) => {
+      const d = drag.current
+      if (!d) return
+      const total = d.rest + (e.clientX - d.lastX)
+      const steps = Math.trunc(total / 5)
+      if (steps !== 0) {
+        adjustRef.current(steps * 0.1)
+        d.rest = total - steps * 5
+        d.lastX = e.clientX
+      }
+    },
+    onPointerUp: (e: React.PointerEvent<HTMLInputElement>) => {
+      drag.current = null
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
+    },
+    onPointerCancel: () => { drag.current = null },
+  }
+  return { ref, pointerHandlers }
+}
 
 interface Props {
   section: Section
@@ -47,6 +99,10 @@ export function FlagEditor({ section, duration, editAdjustValues, onUpdate, onPl
 
   const adjLabel = (v: number) => (v > 0 ? `+${v}` : `${v}`)
 
+  // 開始・終了どちらの入力枠にもスクロール＆スワイプを付ける
+  const startScrub = useTimeScrub(adjustStart)
+  const endScrub = useTimeScrub(adjustEnd)
+
   return (
     <div className="flag-editor">
       <div className="flag-editor-header">
@@ -69,6 +125,8 @@ export function FlagEditor({ section, duration, editAdjustValues, onUpdate, onPl
       <div className="flag-editor-row">
         <span className="flag-editor-label">開始</span>
         <input
+          ref={startScrub.ref}
+          {...startScrub.pointerHandlers}
           className="time-input"
           type="number"
           step="0.1"
@@ -91,6 +149,8 @@ export function FlagEditor({ section, duration, editAdjustValues, onUpdate, onPl
       <div className="flag-editor-row">
         <span className="flag-editor-label">終了</span>
         <input
+          ref={endScrub.ref}
+          {...endScrub.pointerHandlers}
           className="time-input"
           type="number"
           step="0.1"

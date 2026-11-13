@@ -13,10 +13,12 @@ import { AuthPage } from './components/AuthPage'
 import { FileListPage } from './components/FileListPage'
 import { AdminPage } from './components/AdminPage'
 import { TrackMixer } from './components/TrackMixer'
+import { ReverbControl } from './components/ReverbControl'
 import { SongEditPanel } from './components/SongEditPanel'
 import { AudioCachePanel } from './components/AudioCachePanel'
 import { PwaInstallButton } from './components/PwaInstallButton'
 import { formatTime } from './utils/timeFormat'
+import { engine, loadPersonalMix, loadReverb } from './multiplay/bridge'
 import { AppMode, Section } from './types'
 import { buildAppShareUrl, indexUrl } from './config'
 import type { MpIndex } from './multiplay/types'
@@ -24,6 +26,33 @@ import './App.css'
 import './multiplay2.css'
 
 type Screen = 'auth' | 'files' | 'admin' | 'player'
+
+// ── 最後に開いていた曲の記録（再読み込み・PWA再起動時の安全網） ──────────
+// プルリロード等で意図せず再読み込みされても、認証状態（団体）がこの端末に
+// 残っていれば、同じ曲を自動で開き直す。サーバーには上げず localStorage だけに残す。
+const LAST_SESSION_KEY = 'mp_last_session_v1'
+interface LastSession { orgId: string; songId: string; title: string; position: number }
+
+function loadLastSession(): LastSession | null {
+  try {
+    const raw = localStorage.getItem(LAST_SESSION_KEY)
+    if (!raw) return null
+    const s = JSON.parse(raw) as Partial<LastSession>
+    if (typeof s.orgId !== 'string' || typeof s.songId !== 'string') return null
+    return {
+      orgId: s.orgId,
+      songId: s.songId,
+      title: typeof s.title === 'string' ? s.title : '',
+      position: typeof s.position === 'number' && Number.isFinite(s.position) ? s.position : 0,
+    }
+  } catch { return null }
+}
+function saveLastSession(s: LastSession): void {
+  try { localStorage.setItem(LAST_SESSION_KEY, JSON.stringify(s)) } catch { /* 保存できなくても動作は続ける */ }
+}
+function clearLastSession(): void {
+  try { localStorage.removeItem(LAST_SESSION_KEY) } catch { /* noop */ }
+}
 
 export default function App() {
   const [screen, _setScreen] = useState<Screen>('auth')
@@ -88,12 +117,99 @@ export default function App() {
   const onRemoteUpdate = useCallback((secs: Section[]) => importSections(secs), [importSections])
   const { lastSyncedAt, isDirty } = useSectionSync(fileKey, fileLoadCounter, mode, sections, onRemoteUpdate)
 
+  // ── チュートリアル連携（橋渡し） ──────────────────────────────────
+  // ページID: files=曲一覧 / player=再生 / player-edit=編集 / player-settings=設定
+  const screenRef = useRef(screen)
+  screenRef.current = screen
+  const modeRef = useRef(mode)
+  modeRef.current = mode
+  const orgRef = useRef(org)
+  orgRef.current = org
+  useEffect(() => {
+    ;(window as unknown as { MultiPlayTutorialBridge?: unknown }).MultiPlayTutorialBridge = {
+      navigate: (id: string) => {
+        if (id === 'files') {
+          if (orgRef.current) setScreen('files')
+        } else if (id === 'player' || id === 'player-edit' || id === 'player-settings') {
+          setScreen('player')
+          setMode(id === 'player-edit' ? 'edit' : id === 'player-settings' ? 'settings' : 'play')
+        }
+      },
+      currentPage: () => {
+        const s = screenRef.current
+        if (s !== 'player') return s
+        const m = modeRef.current
+        return m === 'edit' ? 'player-edit' : m === 'settings' ? 'player-settings' : 'player'
+      },
+      // チュートリアルの章の途中で触れる可能性のある、この端末内の設定キー
+      // （章の開始時に保存し、終了・中断時に復元する。管理者トークンと団体リストは対象外）
+      snapshotKeys: () => [
+        'recplay_settings',
+        'mp_mixer_open',
+        'mp_pitch_keep_v1',
+        'mp_audio_cache_cap_mb_v1',
+        'mp_audio_cache_meta_v1',
+      ],
+    }
+  }, [setScreen])
+
+  // 曲の読み込みが終わったタイミングで、個人ミックス（端末に保存した音量バランス）を
+  // エンジンへ再適用する。ミキサー側の適用が読み込みより先に走ると、
+  // 読み込みで作り直された GainNode に届かず、表示と音が食い違うため。
+  useEffect(() => {
+    if (loadState.status !== 'ready' || !fileKey) return
+    engine.applyMix(loadPersonalMix(fileKey))
+    // リバーブ量も端末保存の値を復元する（エンジンの初期化順に左右されないよう ready で流す）
+    engine.setReverb(loadReverb())
+  }, [loadState.status, fileKey])
+
+  // ── 最後に開いていた曲の記録と復元 ──────────────────────────────────
+  const lastSessionRef = useRef<LastSession | null>(null)
+  const restorePositionRef = useRef<number | null>(null)
+  const currentTimeRef = useRef(0)
+  useEffect(() => { currentTimeRef.current = currentTime }, [currentTime])
+  const rememberSong = (orgId: string, songId: string, title: string) => {
+    lastSessionRef.current = { orgId, songId, title, position: 0 }
+    saveLastSession(lastSessionRef.current)
+  }
+
+  // 再生位置を定期的に記録する（再読み込み時に概算で復元するため）。
+  // 画面を離れる瞬間（pagehide / 非表示化）にも書き出す。
+  useEffect(() => {
+    if (screen !== 'player' || !fileKey) return
+    const write = () => {
+      const s = lastSessionRef.current
+      if (!s || s.songId !== fileKey) return
+      const next = { ...s, position: Math.max(0, currentTimeRef.current) }
+      lastSessionRef.current = next
+      saveLastSession(next)
+    }
+    const iv = setInterval(write, 5000)
+    const onVis = () => { if (document.visibilityState === 'hidden') write() }
+    document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('pagehide', write)
+    return () => {
+      clearInterval(iv)
+      document.removeEventListener('visibilitychange', onVis)
+      window.removeEventListener('pagehide', write)
+    }
+  }, [screen, fileKey])
+
+  // 復元した曲の読み込みが終わったら、記録しておいた位置へ移動する（概算でよい）
+  useEffect(() => {
+    if (loadState.status !== 'ready') return
+    const p = restorePositionRef.current
+    if (p == null) return
+    restorePositionRef.current = null
+    if (p > 3 && duration > 0 && p < duration - 2) seek(p)
+  }, [loadState.status, duration]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── ?g=（団体リンク）/ ?song=（曲リンク）パラメータ ─────────────────────
+  // URL指定が無い時は、最後に開いていた曲の復元（安全網）を試みる。
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const gParam = params.get('g')
     const songParam = params.get('song')
-    if (!gParam && !songParam) return
 
     fetch(indexUrl())
       .then(r => (r.ok ? r.json() : null))
@@ -111,6 +227,7 @@ export default function App() {
               setFileKey(songParam)
               setFileLoaded(true)
               setScreen('player', true)
+              rememberSong(g.id, songParam, s.title)
               return
             }
           }
@@ -123,7 +240,29 @@ export default function App() {
             setOrg(o)
             setScreen('files', true)
           }
+          return
         }
+        // ── 安全網: 最後に開いていた曲を自動で開き直す ──
+        // 認証状態（団体）がこの端末に残っている場合に限る。
+        const last = loadLastSession()
+        if (!last) return
+        if (!getStoredOrgs().some(o => o.id === last.orgId)) return
+        const g = idx.groups.find(x => x.id === last.orgId)
+        const s = g?.songs.find(x => x.id === last.songId)
+        if (!g || !s) {
+          // 曲が消えている記録は掃除して、通常の入口のままにする
+          clearLastSession()
+          return
+        }
+        const o = { id: g.id, name: g.name }
+        setOrg(o)
+        loadUrl(last.songId)
+        setFileName(s.title)
+        setFileKey(last.songId)
+        setFileLoaded(true)
+        setScreen('player', true)
+        lastSessionRef.current = { orgId: g.id, songId: last.songId, title: s.title, position: last.position }
+        if (last.position > 3) restorePositionRef.current = last.position
       })
       .catch(() => { /* リンク解決に失敗したら通常の入口のまま */ })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -153,6 +292,7 @@ export default function App() {
     setScreen('player')
     setFileLoadCounter((c) => c + 1)
     importSections([])
+    if (org) rememberSong(org.id, key, name)
   }
 
   // 曲データ編集の保存後: 新しい構成でプレイヤーを読み込み直す
@@ -168,6 +308,11 @@ export default function App() {
     setFileKey(null)
     importSections([])
     setScreen('files')
+    // 消した曲が「最後に開いていた曲」なら、復元対象からも外す
+    if (lastSessionRef.current && fileKey && lastSessionRef.current.songId === fileKey) {
+      lastSessionRef.current = null
+      clearLastSession()
+    }
   }
 
   const handleSectionLabelClick = (id: string) => {
@@ -434,7 +579,8 @@ export default function App() {
                 />
               )}
 
-              {/* トラック音量は画面の最下段（マーカーリストとダウンロードより下） */}
+              {/* リバーブ調整はミキサーの真上、トラック音量は画面の最下段 */}
+              {mode === 'play' && fileKey && <ReverbControl />}
               {mode === 'play' && fileKey && (
                 <TrackMixer key={`${fileKey}:${mixerKey}`} songId={fileKey} />
               )}

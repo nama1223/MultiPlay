@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { engine, setCurrentMix } from '../multiplay/bridge'
+import { engine, setCurrentMix, loadPersonalMix, storePersonalMix } from '../multiplay/bridge'
 import { songUrl } from '../config'
 import type { MixState } from '../audio-engine'
 import type { MpSongManifest } from '../multiplay/types'
@@ -12,6 +12,9 @@ const THIRD = 1 / 3
  * 「1/3」はトグル式: 押すと元の音量を覚えて33%にし、もう一度押すと元の音量に戻る。
  * %表示をタップすると数値入力に切り替わり、スライダーのダブルタップで100%に戻る。
  * 横に収まらない場合はカラム列が横スクロールする。
+ * 音量・ミュート・ソロは「個人ミックス」として曲ごとにこの端末へ保存され（bridge.ts）、
+ * モード切替でこの部品がアンマウントされても、同じ曲を再び開いても失われない。
+ * マニフェストの gain とは別概念で、サーバーには上げない。
  */
 export function TrackMixer({ songId }: { songId: string }) {
   const [manifest, setManifest] = useState<MpSongManifest | null>(null)
@@ -37,9 +40,13 @@ export function TrackMixer({ songId }: { songId: string }) {
       .then((m: MpSongManifest | null) => {
         if (!alive || !m) return
         setManifest(m)
+        // 個人ミックス（この端末に保存済み）を土台に、現行トラック分だけを初期値にする。
+        // 新しく増えたトラックは 100%、消えたトラックの分は捨てる。
+        const saved = loadPersonalMix(songId)
         const initial: Record<string, MixState> = {}
-        for (const t of m.tracks) initial[t.id] = { volume: 1, mute: false, solo: false }
+        for (const t of m.tracks) initial[t.id] = saved[t.id] ?? { volume: 1, mute: false, solo: false }
         setMix(initial)
+        storePersonalMix(songId, initial)
         engine.applyMix(initial)
       })
       .catch(() => { /* 表示だけの部品なので失敗時は無言 */ })
@@ -50,8 +57,11 @@ export function TrackMixer({ songId }: { songId: string }) {
 
   if (!manifest || manifest.tracks.length === 0) return null
 
-  const set = (id: string, patch: Partial<MixState>) =>
-    setMix(prev => ({ ...prev, [id]: { ...prev[id], ...patch } }))
+  const set = (id: string, patch: Partial<MixState>) => {
+    const next = { ...mix, [id]: { ...mix[id], ...patch } }
+    setMix(next)
+    storePersonalMix(songId, next)
+  }
 
   /** 手動で音量を変えたら 1/3 トグルの復帰先は無効になる */
   const forgetThird = (id: string) =>
@@ -115,7 +125,17 @@ export function TrackMixer({ songId }: { songId: string }) {
       {open && (
         <div className="track-mixer-body">
           {/* スライダー操作のヒントを、カラム群の背面にうっすら表示する */}
-          <span className="mix-watermark" aria-hidden="true">ダブルタップで100％</span>
+          {/* ウォーターマークはタイル状に敷く: 1枚だとスライダーに隠れて読めない部分が
+              出るため、縦横に繰り返し、奇数行は半分ずらして段違いにする */}
+          <div className="mix-watermark" aria-hidden="true">
+            {Array.from({ length: 7 }).map((_, r) => (
+              <div key={r} className={`mix-wm-row${r % 2 ? ' alt' : ''}`}>
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <span key={i}>ダブルタップで100％</span>
+                ))}
+              </div>
+            ))}
+          </div>
           {manifest.tracks.map(t => {
             const m = mix[t.id] ?? { volume: 1, mute: false, solo: false }
             const thirdOn = t.id in thirdMem

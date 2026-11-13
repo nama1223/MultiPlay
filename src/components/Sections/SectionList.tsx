@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Section, AppMode } from '../../types'
 import { SectionItem } from './SectionItem'
 import { FlagEditor } from './FlagEditor'
-import { downloadCurrentMix, getCurrentManifest } from '../../multiplay/bridge'
+import { downloadCurrentMix, getCurrentManifest, loadDownloadFormat, storeDownloadFormat, type DownloadFormat } from '../../multiplay/bridge'
 
 interface Props {
   sections: Section[]
@@ -76,13 +76,17 @@ export function SectionList({
     listEl.scrollBy({ top: rowRect.top - listRect.top - headerH, behavior: 'smooth' })
   }, [scrollTarget])
 
+  // ダウンロード形式（MP3/WAV）。選択は端末に保存される
+  const [dlFormat, setDlFormat] = useState<DownloadFormat>(() => loadDownloadFormat())
+  const chooseFormat = (f: DownloadFormat) => { setDlFormat(f); storeDownloadFormat(f) }
+
   const handleDownloadAll = async () => {
     if (!audioSrc) return
     setDlAll(true)
     try {
       if (getCurrentManifest()) {
         // 現在のトラックバランスで全体を書き出す
-        await downloadCurrentMix(`${fileName ? fileName + '_' : ''}ミックス.wav`)
+        await downloadCurrentMix(`${fileName ? fileName + '_' : ''}ミックス`, dlFormat)
       }
     } catch (e) {
       alert(`ダウンロードに失敗しました: ${e}`)
@@ -187,9 +191,15 @@ export function SectionList({
       )}
 
       {mode === 'play' && audioSrc && (
-        <button className="download-all-btn" onClick={handleDownloadAll} disabled={dlAll}>
-          {dlAll ? 'ダウンロード中...' : '⬇ このバランスでダウンロード'}
-        </button>
+        <div className="download-row">
+          <div className="dl-format-toggle" role="group" aria-label="ダウンロード形式">
+            <button className={dlFormat === 'mp3' ? 'active' : ''} onClick={() => chooseFormat('mp3')} disabled={dlAll}>MP3</button>
+            <button className={dlFormat === 'wav' ? 'active' : ''} onClick={() => chooseFormat('wav')} disabled={dlAll}>WAV</button>
+          </div>
+          <button className="download-all-btn" onClick={handleDownloadAll} disabled={dlAll}>
+            {dlAll ? '書き出し中…' : '⬇ このバランスでダウンロード'}
+          </button>
+        </div>
       )}
     </div>
   )

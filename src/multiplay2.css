@@ -11,7 +11,13 @@
 /* 縦型ミキサー */
 .track-mixer-body { position: relative; display: flex; flex-direction: row; overflow-x: auto; overflow-y: hidden; padding: 8px 6px 10px; -webkit-overflow-scrolling: touch; }
 /* ダブルタップ100% のヒント: カラム群の背面中央にうっすら（でも読める濃さで）出す */
-.mix-watermark { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; letter-spacing: 2px; color: rgba(184, 255, 217, 0.26); pointer-events: none; z-index: 0; white-space: nowrap; }
+.mix-watermark { position: absolute; inset: 0; overflow: hidden; font-size: 15px; font-weight: 700; letter-spacing: 2px; color: rgba(184, 255, 217, 0.26); pointer-events: none; z-index: 0; }
+.mix-wm-row { display: flex; gap: 2.5em; white-space: nowrap; line-height: 2.35; }
+.mix-wm-row.alt { transform: translateX(-4.6em); }
+.reverb-control { margin: 10px 10px 0; padding: 8px 12px; border: 1px solid #2a5a44; border-radius: 10px; background: #17362a; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.reverb-label { font-size: 13px; font-weight: 600; color: #eeeeff; white-space: nowrap; }
+.reverb-slider { flex: 1; accent-color: #4ae2b5; }
+.reverb-val { font-size: 13px; color: #b8ffd9; min-width: 3.2em; text-align: right; }
 .mix-col { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 66px; padding: 4px 4px 2px; border-right: 1px solid #1b3327; flex-shrink: 0; }
 .mix-col:last-child { border-right: none; }
 .mix-name { font-size: 12px; font-weight: 600; color: #eeeeff; width: 3.4em; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
