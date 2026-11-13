@@ -31,7 +31,10 @@ type Screen = 'auth' | 'files' | 'admin' | 'player'
 // プルリロード等で意図せず再読み込みされても、認証状態（団体）がこの端末に
 // 残っていれば、同じ曲を自動で開き直す。サーバーには上げず localStorage だけに残す。
 const LAST_SESSION_KEY = 'mp_last_session_v1'
-interface LastSession { orgId: string; songId: string; title: string; position: number }
+interface LastSession { orgId: string; songId: string; title: string; position: number; savedAt: number }
+// 自動復元は「直近の利用」に限る: 最後に記録を更新してから30分を超えたら復元しない。
+// 保存時刻を持たない旧形式の記録も、古いものとして復元しない。
+const LAST_SESSION_MAX_AGE_MS = 30 * 60 * 1000
 
 function loadLastSession(): LastSession | null {
   try {
@@ -39,16 +42,20 @@ function loadLastSession(): LastSession | null {
     if (!raw) return null
     const s = JSON.parse(raw) as Partial<LastSession>
     if (typeof s.orgId !== 'string' || typeof s.songId !== 'string') return null
+    const savedAt = typeof s.savedAt === 'number' && Number.isFinite(s.savedAt) ? s.savedAt : 0
+    if (!savedAt || Date.now() - savedAt > LAST_SESSION_MAX_AGE_MS) return null
     return {
       orgId: s.orgId,
       songId: s.songId,
       title: typeof s.title === 'string' ? s.title : '',
       position: typeof s.position === 'number' && Number.isFinite(s.position) ? s.position : 0,
+      savedAt,
     }
   } catch { return null }
 }
 function saveLastSession(s: LastSession): void {
-  try { localStorage.setItem(LAST_SESSION_KEY, JSON.stringify(s)) } catch { /* 保存できなくても動作は続ける */ }
+  // 記録を更新するたびに保存時刻も更新する（＝最終活動時刻）
+  try { localStorage.setItem(LAST_SESSION_KEY, JSON.stringify({ ...s, savedAt: Date.now() })) } catch { /* 保存できなくても動作は続ける */ }
 }
 function clearLastSession(): void {
   try { localStorage.removeItem(LAST_SESSION_KEY) } catch { /* noop */ }
@@ -193,7 +200,7 @@ export default function App() {
   const currentTimeRef = useRef(0)
   useEffect(() => { currentTimeRef.current = currentTime }, [currentTime])
   const rememberSong = (orgId: string, songId: string, title: string) => {
-    lastSessionRef.current = { orgId, songId, title, position: 0 }
+    lastSessionRef.current = { orgId, songId, title, position: 0, savedAt: Date.now() }
     saveLastSession(lastSessionRef.current)
   }
 
@@ -285,7 +292,7 @@ export default function App() {
         setFileKey(last.songId)
         setFileLoaded(true)
         setScreen('player', true)
-        lastSessionRef.current = { orgId: g.id, songId: last.songId, title: s.title, position: last.position }
+        lastSessionRef.current = { orgId: g.id, songId: last.songId, title: s.title, position: last.position, savedAt: last.savedAt }
         if (last.position > 3) restorePositionRef.current = last.position
       })
       .catch(() => { /* リンク解決に失敗したら通常の入口のまま */ })
