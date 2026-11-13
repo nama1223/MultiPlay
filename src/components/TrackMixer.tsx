@@ -114,6 +114,8 @@ export function TrackMixer({ songId }: { songId: string }) {
       </button>
       {open && (
         <div className="track-mixer-body">
+          {/* スライダー操作のヒントを、カラム群の背面にうっすら表示する */}
+          <span className="mix-watermark" aria-hidden="true">ダブルタップで100％</span>
           {manifest.tracks.map(t => {
             const m = mix[t.id] ?? { volume: 1, mute: false, solo: false }
             const thirdOn = t.id in thirdMem

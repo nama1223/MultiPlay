@@ -773,7 +773,10 @@
 }
 
 /* ── Settings ── */
-.settings-panel { padding: 16px; overflow-y: auto; flex: 1; }
+.settings-panel { padding: 16px; flex: none; }
+/* 設定画面の全項目を1つのスクロールフローに収める（浮き要素を作らない） */
+.settings-scroll { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; }
+.settings-extra { padding-top: 0; }
 .settings-title { font-size: 16px; margin-bottom: 20px; color: #eeeeff; }
 .settings-group { margin-bottom: 20px; }
 

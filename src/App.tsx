@@ -8,7 +8,7 @@ import { TrackSeekBar } from './components/SeekBar/TrackSeekBar'
 import { PlaybackControls } from './components/Controls/PlaybackControls'
 import { SectionList } from './components/Sections/SectionList'
 import { ModeSelector } from './components/ModeSelector'
-import { SettingsPanel } from './components/SettingsPanel'
+import { SettingsPanel, TutorialSettings } from './components/SettingsPanel'
 import { AuthPage } from './components/AuthPage'
 import { FileListPage } from './components/FileListPage'
 import { AdminPage } from './components/AdminPage'
@@ -67,16 +67,22 @@ export default function App() {
   } = useAudioPlayer()
   const [mixerKey, setMixerKey] = useState(0)
 
-  const { sections, addSection, updateSection, deleteSection, importSections, undo, redo, undoCount, redoCount } = useSections()
+  const { sections, addSection, updateSection, deleteSection, importSections, undo, redo, undoCount, redoCount, setDurationHint } = useSections()
+  // endTime 再導出用に、エンジンの尺をマーカー状態側へ渡す
+  useEffect(() => { setDurationHint(duration) }, [duration, setDurationHint])
+  // フィクスチャビルドでのみ、検証用にマーカー状態を露出する（本番ビルドでは無効）
+  useEffect(() => {
+    if ((import.meta.env.VITE_MP_FIXTURES as string) === '1') {
+      ;(window as unknown as { __mpSections?: Section[] }).__mpSections = sections
+    }
+  }, [sections])
   const { settings, updateSettings } = useSettings()
-  // 管理者ログイン（localStorage に保存）があれば「編集」モードを解放する
+  // 管理者ログイン（localStorage に保存）の有無。編集モード自体は全員が使え、
+  // 管理者だけが曲データ編集パネルも使える（マーカー編集は全員可）
   const [isAdmin, setIsAdmin] = useState(() => !!localStorage.getItem('mp_admin_token'))
   useEffect(() => {
     setIsAdmin(!!localStorage.getItem('mp_admin_token'))
   }, [screen])
-  useEffect(() => {
-    if (!isAdmin && mode === 'edit') setMode('play')
-  }, [isAdmin, mode])
   const [waveMenuOpen, setWaveMenuOpen] = useState(false)
   const waveMenuRef = useRef<HTMLDivElement>(null)
   const onRemoteUpdate = useCallback((secs: Section[]) => importSections(secs), [importSections])
@@ -188,7 +194,9 @@ export default function App() {
     if (!activeSectionId) return
     const sec = sections.find((s) => s.id === activeSectionId)
     if (!sec) return
-    updateSection(activeSectionId, { startTime: Math.min(currentTime, sec.endTime - 0.1) })
+    // マーカーの開始位置は [0, 曲の尺] だけに制限し、隣のマーカーの追い越しを許可する
+    const t = duration > 0 ? Math.min(currentTime, duration) : currentTime
+    updateSection(activeSectionId, { startTime: Math.max(0, t) })
   }
 
   const handleMarkEnd = () => {
@@ -273,7 +281,7 @@ export default function App() {
                 : 'MultiPlay'
               }
             </span>
-            <ModeSelector mode={mode} onChange={setMode} showEdit={isAdmin} />
+            <ModeSelector mode={mode} onChange={setMode} showEdit />
           </header>
 
           {fileLoaded && (
@@ -392,11 +400,7 @@ export default function App() {
                 />
               )}
 
-              {mode === 'play' && fileKey && (
-                <TrackMixer key={`${fileKey}:${mixerKey}`} songId={fileKey} />
-              )}
-
-              {mode === 'edit' && fileKey && (
+              {mode === 'edit' && fileKey && isAdmin && (
                 <SongEditPanel
                   songId={fileKey}
                   isPlaying={isPlaying}
@@ -430,10 +434,16 @@ export default function App() {
                 />
               )}
 
+              {/* トラック音量は画面の最下段（マーカーリストとダウンロードより下） */}
+              {mode === 'play' && fileKey && (
+                <TrackMixer key={`${fileKey}:${mixerKey}`} songId={fileKey} />
+              )}
+
               {mode === 'settings' && (
-                <>
+                <div className="settings-scroll">
                   <SettingsPanel settings={settings} onUpdate={updateSettings} pitchKeep={pitchKeep} onPitchKeepChange={setPitchKeep} />
                   <AudioCachePanel />
+                  <TutorialSettings />
                   <div className="cache-panel mp-install-panel">
                     <div className="cache-panel-title">アプリとしてインストール</div>
                     <p className="cache-panel-text">
@@ -441,7 +451,7 @@ export default function App() {
                     </p>
                     <PwaInstallButton />
                   </div>
-                </>
+                </div>
               )}
             </div>
           )}

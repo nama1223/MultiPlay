@@ -17,9 +17,15 @@ export function FlagEditor({ section, duration, editAdjustValues, onUpdate, onPl
   const [startInput, setStartInput] = useState(String(section.startTime.toFixed(1)))
   const [endInput, setEndInput] = useState(String(section.endTime.toFixed(1)))
 
+  // マーカーモードでは開始位置は [0, 曲の尺] だけに制限し、隣のマーカーの追い越しを許可する
+  const clampStart = (v: number) =>
+    markerMode
+      ? Math.max(0, duration > 0 ? Math.min(v, duration) : v)
+      : Math.max(0, Math.min(v, section.endTime - 0.1))
+
   const applyStart = (val: string) => {
     const n = parseFloat(val)
-    if (!isNaN(n)) onUpdate(section.id, { startTime: Math.max(0, Math.min(n, section.endTime - 0.1)) })
+    if (!isNaN(n)) onUpdate(section.id, { startTime: clampStart(n) })
   }
 
   const applyEnd = (val: string) => {
@@ -28,7 +34,7 @@ export function FlagEditor({ section, duration, editAdjustValues, onUpdate, onPl
   }
 
   const adjustStart = (delta: number) => {
-    const newVal = Math.max(0, Math.min(section.startTime + delta, section.endTime - 0.1))
+    const newVal = clampStart(section.startTime + delta)
     onUpdate(section.id, { startTime: newVal })
     setStartInput(newVal.toFixed(1))
   }

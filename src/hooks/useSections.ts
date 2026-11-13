@@ -6,6 +6,26 @@ const MAX_HISTORY = 50
 export function useSections() {
   const [sections, setSections] = useState<Section[]>([])
   const nextNumRef = useRef(1)
+  // 曲の尺（最後のマーカーの endTime 導出用）。App がエンジンの duration を渡す
+  const durationRef = useRef(0)
+  const setDurationHint = useCallback((d: number) => { durationRef.current = d }, [])
+
+  /**
+   * 全マーカーの endTime を「次のマーカーの開始位置（無ければ曲末）」で再導出する。
+   * endTime は読み込み・作成時に一度だけ決まるため、開始位置が動くたびに再計算しないと
+   * 古い endTime が「今は存在しない位置の上限」として残ってしまう。それを防ぐ正規化。
+   */
+  const normalizeEnds = useCallback((list: Section[]): Section[] => {
+    if (list.length === 0) return list
+    const sorted = [...list].sort((a, b) => a.startTime - b.startTime)
+    const fallbackEnd = Math.max(...list.map(s => s.endTime), 0)
+    const songEnd = durationRef.current > 0 ? durationRef.current : fallbackEnd
+    const endOf = new Map<string, number>()
+    sorted.forEach((s, i) => {
+      endOf.set(s.id, i + 1 < sorted.length ? sorted[i + 1].startTime : Math.max(songEnd, s.startTime))
+    })
+    return list.map(s => ({ ...s, endTime: endOf.get(s.id) ?? s.endTime }))
+  }, [])
 
   // ── History refs ────────────────────────────────────────────────────────
   const sectionsRef = useRef<Section[]>([])   // mirror of state (always current)
@@ -87,21 +107,25 @@ export function useSections() {
         isExcluded: false,
         color: SECTION_COLORS[(num - 1) % SECTION_COLORS.length],
       }
-      return [...prev, newSection]
+      return normalizeEnds([...prev, newSection])
     })
     return id
-  }, [pushHistory, setSync])
+  }, [pushHistory, setSync, normalizeEnds])
 
   // updateSection uses debounced history (seekbar drag fires many times per second)
+  // 開始位置が変わったら、全マーカーの endTime をその場で再導出して状態を正規化する
   const updateSection = useCallback((id: string, updates: Partial<Section>) => {
     ensureHistory()
-    setSync((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s)))
-  }, [ensureHistory, setSync])
+    setSync((prev) => {
+      const next = prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
+      return updates.startTime !== undefined ? normalizeEnds(next) : next
+    })
+  }, [ensureHistory, setSync, normalizeEnds])
 
   const deleteSection = useCallback((id: string) => {
     pushHistory()
-    setSync((prev) => prev.filter((s) => s.id !== id))
-  }, [pushHistory, setSync])
+    setSync((prev) => normalizeEnds(prev.filter((s) => s.id !== id)))
+  }, [pushHistory, setSync, normalizeEnds])
 
   const importSections = useCallback((data: Section[]) => {
     sectionsRef.current = data
@@ -115,7 +139,7 @@ export function useSections() {
   }, [])
 
   return {
-    sections, setSections,
+    sections, setSections, setDurationHint,
     addSection, updateSection, deleteSection, importSections,
     undo, redo, undoCount, redoCount,
   }

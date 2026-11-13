@@ -40,7 +40,9 @@ function adminToken(): string {
 
 /**
  * 区間（マーカー）の同期。保存先は曲の manifest.json。
- * 読み込みは公開API、書き込みは管理者の合言葉がある時だけ行う。
+ * 読み込みは公開API。書き込みは、管理者は従来の管理者PUT、
+ * それ以外の人は markers 専用エンドポイント（マーカー配列だけを差し替える）を使う。
+ * 信頼モデルは RecPlay の区間と同じ「曲URLを知っている家族は編集可」。
  */
 export function useSectionSync(
   fileKey: string | null,
@@ -90,25 +92,32 @@ export function useSectionSync(
     return () => { cancelled = true }
   }, [fileKey, fileLoadCounter])
 
-  // 編集モードでの変更を manifest へ保存（合言葉がある場合のみ）
+  // 編集モードでの変更を manifest へ保存する
   useEffect(() => {
     if (!fileKey || mode !== 'edit') return
     if (!loadedForRef.current.startsWith(`${fileKey}#`)) return
     const json = JSON.stringify(sections)
     if (json === remoteJsonRef.current) return
     setIsDirty(true)
-    if (!adminToken() || FIXTURES) return
+    if (FIXTURES) return
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(async () => {
       const m = getCurrentManifest()
       if (!m || m.id !== fileKey) return
       const next = manifestWithSections(m, sections)
       try {
-        const res = await fetch(`${API_BASE}/api/admin/object?key=${encodeURIComponent(`songs/${fileKey}/manifest.json`)}`, {
-          method: 'PUT',
-          headers: { Authorization: `Bearer ${adminToken()}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify(next, null, 1),
-        })
+        const token = adminToken()
+        const res = token
+          ? await fetch(`${API_BASE}/api/admin/object?key=${encodeURIComponent(`songs/${fileKey}/manifest.json`)}`, {
+              method: 'PUT',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify(next, null, 1),
+            })
+          : await fetch(`${API_BASE}/api/song/${fileKey}/markers`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ markers: next.markers }),
+            })
         if (res.ok) {
           setCurrentManifest(next)
           remoteJsonRef.current = json
@@ -119,6 +128,29 @@ export function useSectionSync(
     }, DEBOUNCE_MS)
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
   }, [sections, fileKey, mode])
+
+  // 再生モードでは10秒おきにポーリングし、他の人のマーカー編集を取り込む（RecPlay と同じ運用）
+  useEffect(() => {
+    if (!fileKey || mode !== 'play' || FIXTURES) return
+    let cancelled = false
+    const timer = setInterval(async () => {
+      try {
+        const res = await fetch(`${songUrl(fileKey)}?v=${Date.now()}`, { cache: 'no-store' })
+        if (!res.ok || cancelled) return
+        const m = (await res.json()) as MpSongManifest
+        if (cancelled || !m || m.id !== fileKey) return
+        const { engine } = await import('../multiplay/bridge')
+        const secs = sectionsFromManifest(m, engine.duration)
+        const json = JSON.stringify(secs)
+        if (json === remoteJsonRef.current) return
+        setCurrentManifest(m)
+        remoteJsonRef.current = json
+        onRemoteRef.current(secs)
+        setLastSyncedAt(new Date())
+      } catch { /* 取り込み失敗時は次の周期に回す */ }
+    }, 10_000)
+    return () => { cancelled = true; clearInterval(timer) }
+  }, [fileKey, mode])
 
   return { lastSyncedAt, isDirty }
 }

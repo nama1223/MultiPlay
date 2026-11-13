@@ -51,10 +51,32 @@ function ValuesEditor({
   )
 }
 
-export function SettingsPanel({ settings, onUpdate, pitchKeep, onPitchKeepChange }: Props) {
+/** チュートリアルの案内ボタンの表示設定（設定画面のフロー内、キャッシュの下に置く） */
+export function TutorialSettings() {
   const [tutorialBtn, setTutorialBtn] = useState<boolean>(
     () => (window as unknown as { NamaTutorial?: { isButtonVisible?: () => boolean } }).NamaTutorial?.isButtonVisible?.() ?? true,
   )
+  return (
+    <div className="settings-panel settings-extra">
+      <div className="settings-group">
+        <label className="settings-label">チュートリアル</label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={tutorialBtn}
+            onChange={(e) => {
+              setTutorialBtn(e.target.checked)
+              ;(window as unknown as { NamaTutorial?: { setButtonVisible?: (v: boolean) => void } }).NamaTutorial?.setButtonVisible?.(e.target.checked)
+            }}
+          />
+          案内ボタン（チュートリアル）を表示する
+        </label>
+      </div>
+    </div>
+  )
+}
+
+export function SettingsPanel({ settings, onUpdate, pitchKeep, onPitchKeepChange }: Props) {
   return (
     <div className="settings-panel">
       <h3 className="settings-title">設定</h3>
@@ -70,6 +92,19 @@ export function SettingsPanel({ settings, onUpdate, pitchKeep, onPitchKeepChange
         values={settings.editAdjustValues}
         onChange={(vals) => onUpdate({ editAdjustValues: vals })}
       />
+
+      {/* リセット対象（スキップ/微調整の数値）と同じグループ内に置く */}
+      <button
+        className="reset-btn"
+        onClick={() =>
+          onUpdate({
+            skipValues: [...DEFAULT_SETTINGS.skipValues],
+            editAdjustValues: [...DEFAULT_SETTINGS.editAdjustValues],
+          })
+        }
+      >
+        デフォルトに戻す
+      </button>
 
       {onPitchKeepChange && (
         <div className="settings-group">
@@ -89,36 +124,9 @@ export function SettingsPanel({ settings, onUpdate, pitchKeep, onPitchKeepChange
         </div>
       )}
 
-      <button
-        className="reset-btn"
-        onClick={() =>
-          onUpdate({
-            skipValues: [...DEFAULT_SETTINGS.skipValues],
-            editAdjustValues: [...DEFAULT_SETTINGS.editAdjustValues],
-          })
-        }
-      >
-        デフォルトに戻す
-      </button>
-
       <p className="settings-hint" style={{ marginTop: 16 }}>
         設定はこの端末のLocalStorageに保存されます。
       </p>
-
-      <div className="settings-group" style={{ marginTop: 20 }}>
-        <label className="settings-label">チュートリアル</label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, cursor: 'pointer' }}>
-          <input
-            type="checkbox"
-            checked={tutorialBtn}
-            onChange={(e) => {
-              setTutorialBtn(e.target.checked)
-              ;(window as unknown as { NamaTutorial?: { setButtonVisible?: (v: boolean) => void } }).NamaTutorial?.setButtonVisible?.(e.target.checked)
-            }}
-          />
-          案内ボタン（チュートリアル）を表示する
-        </label>
-      </div>
     </div>
   )
 }

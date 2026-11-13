@@ -3,7 +3,7 @@ import { AppMode } from '../types'
 interface Props {
   mode: AppMode
   onChange: (mode: AppMode) => void
-  /** 管理者の時だけ「編集」を出す */
+  /** 「編集」を出すか（マーカー編集は全員可なので通常は常に true） */
   showEdit?: boolean
 }
 

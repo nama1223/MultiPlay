@@ -106,13 +106,12 @@ export function TrackSeekBar({ currentTime, duration, sections, mode, activeSect
   }
   const endScrub = () => { scrubRef.current = false }
 
-  const onFlagPointerDown = (e: React.PointerEvent, sec: Section, idx: number) => {
+  const onFlagPointerDown = (e: React.PointerEvent, sec: Section, _idx: number) => {
     if (mode !== 'edit' || duration <= 0) return
     e.stopPropagation()
     const move = (ev: PointerEvent) => {
-      const prev = idx > 0 ? sorted[idx - 1].startTime + 0.1 : 0
-      const next = idx + 1 < sorted.length ? sorted[idx + 1].startTime - 0.1 : duration - 0.1
-      const t = Math.max(prev, Math.min(next, fracFromClientX(ev.clientX) * duration))
+      // 開始位置は [0, 曲の尺] だけに制限し、隣のマーカーの追い越しを許可する
+      const t = Math.max(0, Math.min(duration, fracFromClientX(ev.clientX) * duration))
       onSectionUpdate(sec.id, { startTime: Math.round(t * 100) / 100 })
     }
     const up = () => {
@@ -124,6 +123,39 @@ export function TrackSeekBar({ currentTime, duration, sections, mode, activeSect
   }
 
   const playFrac = duration > 0 ? currentTime / duration : 0
+
+  // ── ズーム行の背景ドラッグで表示範囲をパンする（ボタン自体のクリックは維持） ──
+  const zoomPanRef = useRef<{ startX: number; startLeft: number } | null>(null)
+  const onZoomBarPointerDown = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest('button')) return
+    const el = hscrollRef.current
+    if (!el) return
+    zoomPanRef.current = { startX: e.clientX, startLeft: el.scrollLeft }
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  }
+  const onZoomBarPointerMove = (e: React.PointerEvent) => {
+    const pan = zoomPanRef.current
+    const el = hscrollRef.current
+    if (!pan || !el) return
+    el.scrollLeft = pan.startLeft - (e.clientX - pan.startX)
+  }
+  const onZoomBarPointerUp = () => { zoomPanRef.current = null }
+
+  // ── 波形上での縦ホイールを横スクロールへ変換する（ズーム中のみ） ──
+  const zoomRef = useRef(zoom)
+  zoomRef.current = zoom
+  useEffect(() => {
+    const el = hscrollRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      if (zoomRef.current <= 1) return
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return
+      e.preventDefault()
+      el.scrollLeft += e.deltaY
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
 
   // 再生ヘッドが見える範囲から出たら横スクロールを追いつかせる
   useEffect(() => {
@@ -156,7 +188,14 @@ export function TrackSeekBar({ currentTime, duration, sections, mode, activeSect
 
   return (
     <div className="seekbar-container tseek">
-      <div className="tseek-zoombar">
+      <div
+        className="tseek-zoombar"
+        onPointerDown={onZoomBarPointerDown}
+        onPointerMove={onZoomBarPointerMove}
+        onPointerUp={onZoomBarPointerUp}
+        onPointerCancel={onZoomBarPointerUp}
+        title="ドラッグで表示範囲を左右へ動かせます"
+      >
         {/* 行幅全体＝総時間として、現在のシーク位置を赤線で示す（ボタンの背面） */}
         <div className="tseek-zoom-pos" style={{ left: `${playFrac * 100}%` }} />
         <span className="tseek-zoom-label">ズーム</span>
