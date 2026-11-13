@@ -4,9 +4,12 @@ import { songUrl } from '../config'
 import type { MixState } from '../audio-engine'
 import type { MpSongManifest } from '../multiplay/types'
 
+const THIRD = 1 / 3
+
 /**
- * トラック別ミキサー。RecPlay の区間リストと同じ行レイアウトで、
- * 各トラックの音量・ミュート・ソロを操作する。
+ * トラック別ミキサー（縦型フェーダー形式）。
+ * トラックごとの縦カラム: 上=名前、中=縦スライダー、下=%表示と M / 1/3 / S ボタン。
+ * 横に収まらない場合はカラム列が横スクロールする。
  */
 export function TrackMixer({ songId }: { songId: string }) {
   const [manifest, setManifest] = useState<MpSongManifest | null>(null)
@@ -47,22 +50,30 @@ export function TrackMixer({ songId }: { songId: string }) {
         <span className="track-mixer-title">トラック音量</span>
         <span className="track-mixer-chevron">{open ? '▲ 畳む' : '▼ 開く'}</span>
       </button>
-      {open && manifest.tracks.map(t => {
-        const m = mix[t.id] ?? { volume: 1, mute: false, solo: false }
-        return (
-          <div key={t.id} className="track-row">
-            <span className="track-name">{t.name}</span>
-            <button className={`track-ms${m.mute ? ' on-mute' : ''}`} onClick={() => set(t.id, { mute: !m.mute })}>M</button>
-            <button className={`track-ms${m.solo ? ' on-solo' : ''}`} onClick={() => set(t.id, { solo: !m.solo })}>S</button>
-            <input
-              type="range" min={0} max={150} value={Math.round(m.volume * 100)}
-              onChange={e => set(t.id, { volume: Number(e.target.value) / 100 })}
-              className="track-vol" aria-label={`${t.name} の音量`}
-            />
-            <span className="track-vol-val">{Math.round(m.volume * 100)}%</span>
-          </div>
-        )
-      })}
+      {open && (
+        <div className="track-mixer-body">
+          {manifest.tracks.map(t => {
+            const m = mix[t.id] ?? { volume: 1, mute: false, solo: false }
+            const isThird = Math.abs(m.volume - THIRD) < 0.02
+            return (
+              <div key={t.id} className="mix-col">
+                <span className="mix-name" title={t.name}>{t.name}</span>
+                <input
+                  type="range" min={0} max={150} value={Math.round(m.volume * 100)}
+                  onChange={e => set(t.id, { volume: Number(e.target.value) / 100 })}
+                  className="mix-vol" aria-label={`${t.name} の音量`}
+                />
+                <span className="mix-val">{Math.round(m.volume * 100)}%</span>
+                <div className="mix-btns">
+                  <button className={`mix-btn${m.mute ? ' on-mute' : ''}`} onClick={() => set(t.id, { mute: !m.mute })} title="ミュート">M</button>
+                  <button className={`mix-btn${isThird ? ' on-third' : ''}`} onClick={() => set(t.id, { volume: THIRD })} title="音量を1/3にする">1/3</button>
+                  <button className={`mix-btn${m.solo ? ' on-solo' : ''}`} onClick={() => set(t.id, { solo: !m.solo })} title="ソロ">S</button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

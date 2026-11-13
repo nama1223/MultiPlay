@@ -12,11 +12,6 @@ export interface Section {
   color: string
 }
 
-export interface ExcludedZone {
-  start: number
-  end: number
-}
-
 export interface AppSettings {
   skipValues: number[]
   editAdjustValues: number[]

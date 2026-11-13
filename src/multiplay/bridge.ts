@@ -13,9 +13,9 @@ import type { MixState } from '../audio-engine'
 let currentMix: Record<string, MixState> = {}
 export function setCurrentMix(mix: Record<string, MixState>) { currentMix = mix }
 
-/** 現在のバランスでミックスを書き出してダウンロードさせる（SectionList の全体DL用） */
-export async function downloadCurrentMix(fileName: string, excludes: { start: number; end: number }[]): Promise<void> {
-  const blob = await engine.renderMixdown(currentMix, excludes)
+/** 現在のバランスで全体のミックスを書き出してダウンロードさせる（マーカーリストの全体DL用） */
+export async function downloadCurrentMix(fileName: string): Promise<void> {
+  const blob = await engine.renderMixdown(currentMix)
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

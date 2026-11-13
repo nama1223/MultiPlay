@@ -25,7 +25,7 @@ export function useSections() {
     })
   }, [])
 
-  // Immediate history push (for add / delete / toggleExclude / reorder)
+  // Immediate history push (for add / delete)
   const pushHistory = useCallback(() => {
     if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current)
     pendingRef.current = false
@@ -81,7 +81,7 @@ export function useSections() {
     setSync((prev) => {
       const newSection: Section = {
         id,
-        label: `区間 ${num}`,
+        label: `マーカー ${num}`,
         startTime,
         endTime,
         isExcluded: false,
@@ -103,11 +103,6 @@ export function useSections() {
     setSync((prev) => prev.filter((s) => s.id !== id))
   }, [pushHistory, setSync])
 
-  const toggleExclude = useCallback((id: string) => {
-    pushHistory()
-    setSync((prev) => prev.map((s) => (s.id === id ? { ...s, isExcluded: !s.isExcluded } : s)))
-  }, [pushHistory, setSync])
-
   const importSections = useCallback((data: Section[]) => {
     sectionsRef.current = data
     setSections(data)
@@ -119,14 +114,9 @@ export function useSections() {
     setRedoCount(0)
   }, [])
 
-  const reorderSections = useCallback((newOrder: Section[]) => {
-    pushHistory()
-    setSync(newOrder)
-  }, [pushHistory, setSync])
-
   return {
     sections, setSections,
-    addSection, updateSection, deleteSection, toggleExclude, importSections, reorderSections,
+    addSection, updateSection, deleteSection, importSections,
     undo, redo, undoCount, redoCount,
   }
 }

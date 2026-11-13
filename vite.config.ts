@@ -12,7 +12,7 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
       },
-      includeAssets: ['NamaRecPlay192.png', 'NamaRecPlay512.png', 'NamaRecPlay1024.png'],
+      includeAssets: ['MultiPlayLogo192.png', 'MultiPlayLogo512.png', 'MultiPlayLogo1024.png'],
       manifest: {
         name: 'MultiPlay',
         short_name: 'MultiPlay',
@@ -25,19 +25,19 @@ export default defineConfig({
         scope: '.',
         icons: [
           {
-            src: 'NamaRecPlay192.png',
+            src: 'MultiPlayLogo192.png',
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any',
           },
           {
-            src: 'NamaRecPlay512.png',
+            src: 'MultiPlayLogo512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any',
           },
           {
-            src: 'NamaRecPlay1024.png',
+            src: 'MultiPlayLogo1024.png',
             sizes: '1024x1024',
             type: 'image/png',
             purpose: 'any',

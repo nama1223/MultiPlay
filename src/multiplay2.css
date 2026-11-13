@@ -2,9 +2,24 @@
 .change-btn { background: #1d4a34; border: 1px solid #2a5a44; border-radius: 10px; padding: 6px 12px; color: #a9d9bd; font-size: 12px; }
 .change-btn:active { background: #256b47; }
 .track-mixer { margin: 10px 10px 0; border: 1px solid #2a5a44; border-radius: 10px; background: #17362a; overflow: hidden; flex-shrink: 0; }
-.track-mixer-title { font-size: 12px; color: #82b294; letter-spacing: 0.4px; }
-.track-mixer-head { display: flex; align-items: center; justify-content: space-between; width: 100%; background: none; border: none; padding: 8px 12px 6px; cursor: pointer; text-align: left; }
-.track-mixer-chevron { font-size: 11px; color: #a9d9bd; background: #1d4a34; border: 1px solid #2a5a44; border-radius: 8px; padding: 3px 8px; flex-shrink: 0; }
+.track-mixer-title { font-size: 13px; font-weight: 700; color: #b8ffd9; letter-spacing: 0.4px; }
+/* 畳む/開く見出しは、幅いっぱいのボタンらしいバーにする（押せる範囲を一目で分かるように） */
+.track-mixer-head { display: flex; align-items: center; justify-content: space-between; width: 100%; background: #1d4a34; border: none; border-bottom: 1px solid #2a5a44; padding: 11px 12px; cursor: pointer; text-align: left; }
+.track-mixer-head:active { background: #256b47; }
+.track-mixer-chevron { font-size: 11px; font-weight: 700; color: #b8ffd9; background: #256b47; border: 1px solid #3f7d5c; border-radius: 8px; padding: 4px 10px; flex-shrink: 0; }
+
+/* 縦型ミキサー */
+.track-mixer-body { display: flex; flex-direction: row; overflow-x: auto; overflow-y: hidden; padding: 8px 6px 10px; -webkit-overflow-scrolling: touch; }
+.mix-col { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 66px; padding: 4px 4px 2px; border-right: 1px solid #1b3327; flex-shrink: 0; }
+.mix-col:last-child { border-right: none; }
+.mix-name { font-size: 12px; font-weight: 600; color: #eeeeff; width: 3.4em; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mix-vol { writing-mode: vertical-lr; direction: rtl; width: 26px; height: 118px; accent-color: #16a34a; cursor: pointer; }
+.mix-val { font-size: 11px; color: #82b294; font-variant-numeric: tabular-nums; }
+.mix-btns { display: flex; gap: 3px; }
+.mix-btn { min-width: 25px; height: 26px; padding: 0 3px; border-radius: 8px; border: 1px solid #2a5a44; background: #1d4a34; color: #a9d9bd; cursor: pointer; font-weight: bold; font-size: 10px; }
+.mix-btn.on-mute { background: #5a2438; border-color: #8a3a5a; color: #ffb0c0; }
+.mix-btn.on-solo { background: #16a34a; border-color: #16a34a; color: #fff; }
+.mix-btn.on-third { background: #16a34a; border-color: #16a34a; color: #fff; }
 
 /* 読み込み中オーバーレイ＋ゲージ */
 .player { position: relative; }
@@ -42,16 +57,24 @@
 .file-create { margin: 18px 10px 0; border: 1px dashed #2a5a44; border-radius: 10px; padding: 12px; background: rgba(23, 54, 42, 0.5); }
 .file-create-title { font-size: 13px; font-weight: 700; color: #63e6a4; margin-bottom: 4px; }
 .file-create-note { font-size: 11px; color: #82b294; margin: 4px 0 0; }
-.track-row { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-bottom: 1px solid #1b3327; min-height: 40px; }
-.track-row:last-child { border-bottom: none; }
-.track-name { font-size: 14px; font-weight: 600; color: #eeeeff; min-width: 5.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.track-ms { width: 30px; height: 30px; border-radius: 10px; border: 1px solid #2a5a44; background: #1d4a34; color: #a9d9bd; cursor: pointer; font-weight: bold; font-size: 12px; flex-shrink: 0; }
-.track-ms.on-mute { background: #5a2438; border-color: #8a3a5a; color: #ffb0c0; }
-.track-ms.on-solo { background: #16a34a; border-color: #16a34a; color: #fff; }
-.track-vol { flex: 1; accent-color: #16a34a; }
-.track-vol-val { font-size: 11px; color: #82b294; width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; }
+/* マーカーリスト: 行内再生ボタン＋選択中マーカーの編集ブロック */
+.marker-play-btn { flex-shrink: 0; width: 36px; height: 30px; margin-left: 8px; border-radius: 9px; background: #1e2a52; color: #7eb8f8; border: 1px solid #2a3a6a; font-size: 12px; cursor: pointer; }
+.marker-play-btn:active { opacity: 0.7; }
+.marker-edit-block { padding: 8px 10px 10px; border-top: 1px solid #1d4a34; background: #101024; }
+.marker-edit-block .flag-editor { margin-top: 0; }
+.marker-edit-block .action-btn.delete { margin-top: 6px; }
+.flag-editor-name { font-size: 13px; font-weight: 600; color: #eeeeff; max-width: 8em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* トラック別シークバー */
+.tseek-zoombar { display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding: 4px 8px; background: #17362a; border-bottom: 1px solid #2a5a44; }
+.tseek-zoom-label { font-size: 11px; color: #82b294; }
+.tseek-zoom-val { font-size: 11px; color: #a9d9bd; min-width: 2.6em; text-align: center; font-variant-numeric: tabular-nums; }
+.tseek-zoom-btn { width: 30px; height: 24px; border-radius: 7px; border: 1px solid #2a5a44; background: #1d4a34; color: #a9d9bd; font-size: 14px; font-weight: 700; cursor: pointer; line-height: 1; }
+.tseek-zoom-btn:active { background: #256b47; }
+.tseek-zoom-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.tseek-main { display: flex; align-items: stretch; }
+.tseek-labelcol { position: relative; flex-shrink: 0; background: #101d15; border-right: 1px solid #1b3327; z-index: 2; }
+.tseek-hscroll { flex: 1; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
 .tseek-body { position: relative; touch-action: none; }
 .tseek-stripbands { position: absolute; top: 0; right: 0; }
 .tseek-band { position: absolute; top: 0; height: 100%; overflow: hidden; cursor: grab; }
@@ -71,6 +94,21 @@
 .mp-admin-row.sticky { position: sticky; bottom: 0; padding: 10px 0; background: #101d15; }
 .mp-admin-h { margin: 18px 0 8px; font-size: 14px; color: #63e6a4; }
 .mp-admin-track { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border: 1px solid #2a5a44; border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; background: #17362a; }
+/* 曲データ編集のトラック行は1行に収める */
+.mp-admin-track.oneline { flex-wrap: nowrap; padding: 6px 8px; gap: 5px; }
+.mp-admin-track .track-name-input { flex: 1 1 56px; min-width: 56px; padding: 6px; font-size: 13px; }
+.mp-admin-track .offset-input { width: 58px; padding: 6px 4px; font-size: 13px; }
+.mp-admin-track .mp-unit { font-size: 11px; color: #82b294; }
+.mp-admin-track.oneline .mp-btn.tiny { padding: 4px 5px; font-size: 10px; }
+.mp-admin-track.oneline .mp-btn.danger { padding: 6px 8px; font-size: 12px; flex-shrink: 0; }
+.mp-admin-track.oneline .mp-nudges { flex-shrink: 0; }
+.mp-admin-track.oneline .mp-num { flex-shrink: 0; }
+/* トラック追加ドロップゾーン */
+.drop-zone { border: 1.5px dashed #2a5a44; border-radius: 10px; padding: 10px 12px; margin: 10px 0; background: rgba(23, 54, 42, 0.45); }
+.drop-zone.over { border-color: #63e6a4; background: rgba(99, 230, 164, 0.10); }
+.drop-zone-text { font-size: 12px; color: #82b294; text-align: center; margin-bottom: 6px; }
+.drop-zone.over .drop-zone-text { color: #b8ffd9; }
+.drop-zone .mp-admin-row { margin: 4px 0; }
 .mp-input { padding: 9px 10px; border: 1px solid #2a5a44; border-radius: 8px; font-size: 14px; background: #0d2016; color: #eeeeff; }
 .mp-input.grow { flex: 1; min-width: 120px; }
 .mp-input.small { width: 90px; }

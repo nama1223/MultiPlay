@@ -27,6 +27,7 @@ export function SongEditPanel({ songId, onSaved, onDeleted }: Props) {
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
   const [armDelete, setArmDelete] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -81,27 +82,40 @@ export function SongEditPanel({ songId, onSaved, onDeleted }: Props) {
     } catch (e) { setMsg(e instanceof Error ? e.message : String(e)); setBusy(false) }
   }
 
-  const addTrackFile = async (file: File) => {
-    if (!song) return
+  const addTrackFiles = async (files: File[]) => {
+    if (!song || files.length === 0) return
     setBusy(true)
     try {
-      const url = await uploadAudio(song.id, file)
-      const name = file.name.replace(/\.[^.]+$/, '')
-      // 波形の先行表示用に、この場でピークと長さを計算して持たせる
-      let peaks: number[] | undefined
-      let durationSec: number | undefined
-      try {
-        const ab = await file.arrayBuffer()
-        const ctx = new AudioContext()
-        const buf = await ctx.decodeAudioData(ab)
-        peaks = roundPeaks(computePeaks(buf))
-        durationSec = buf.duration
-        void ctx.close()
-      } catch { /* 波形が作れなくてもアップロード自体は成立させる */ }
-      setSong({ ...song, tracks: [...song.tracks, { id: newId('t'), name, url, offsetMs: 0, gain: 1, peaks, durationSec }] })
-      setMsg(`「${file.name}」をアップロードしました（まだ保存はされていません）`)
+      const added: MpSongManifest['tracks'] = []
+      for (const file of files) {
+        const url = await uploadAudio(song.id, file)
+        const name = file.name.replace(/\.[^.]+$/, '')
+        // 波形の先行表示用に、この場でピークと長さを計算して持たせる
+        let peaks: number[] | undefined
+        let durationSec: number | undefined
+        try {
+          const ab = await file.arrayBuffer()
+          const ctx = new AudioContext()
+          const buf = await ctx.decodeAudioData(ab)
+          peaks = roundPeaks(computePeaks(buf))
+          durationSec = buf.duration
+          void ctx.close()
+        } catch { /* 波形が作れなくてもアップロード自体は成立させる */ }
+        added.push({ id: newId('t'), name, url, offsetMs: 0, gain: 1, peaks, durationSec })
+      }
+      setSong(cur => (cur ? { ...cur, tracks: [...cur.tracks, ...added] } : cur))
+      setMsg(files.length > 1
+        ? `${files.length} 件のトラックをアップロードしました（まだ保存はされていません）`
+        : `「${files[0].name}」をアップロードしました（まだ保存はされていません）`)
     } catch (e) { setMsg(e instanceof Error ? e.message : String(e)) }
     setBusy(false)
+  }
+
+  const onDropFiles = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    const files = [...e.dataTransfer.files].filter(f => f.type.startsWith('audio/') || /\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(f.name))
+    if (files.length) void addTrackFiles(files)
   }
 
   return (
@@ -122,28 +136,37 @@ export function SongEditPanel({ songId, onSaved, onDeleted }: Props) {
 
               <h3 className="mp-admin-h">トラック</h3>
               {song.tracks.map(t => (
-                <div key={t.id} className="mp-admin-track">
-                  <input value={t.name} onChange={e => setSong({ ...song, tracks: song.tracks.map(x => x.id === t.id ? { ...x, name: e.target.value } : x) })} className="mp-input grow" aria-label="トラック名" />
-                  <label className="mp-num">ずらし(ms)
-                    <input type="number" step={10} value={t.offsetMs ?? 0} onChange={e => setSong({ ...song, tracks: song.tracks.map(x => x.id === t.id ? { ...x, offsetMs: Number(e.target.value) } : x) })} className="mp-input small" />
+                <div key={t.id} className="mp-admin-track oneline">
+                  <input value={t.name} onChange={e => setSong({ ...song, tracks: song.tracks.map(x => x.id === t.id ? { ...x, name: e.target.value } : x) })} className="mp-input track-name-input" aria-label="トラック名" />
+                  <label className="mp-num">ずらし
+                    <input type="number" step={10} value={t.offsetMs ?? 0} onChange={e => setSong({ ...song, tracks: song.tracks.map(x => x.id === t.id ? { ...x, offsetMs: Number(e.target.value) } : x) })} className="mp-input offset-input" aria-label="ずらし（ミリ秒）" />
+                    <span className="mp-unit">ms</span>
                   </label>
                   <span className="mp-nudges">
                     {[-100, -10, 10, 100].map(d => (
                       <button key={d} className="mp-btn sub tiny" onClick={() => setSong({ ...song, tracks: song.tracks.map(x => x.id === t.id ? { ...x, offsetMs: (x.offsetMs ?? 0) + d } : x) })}>{d > 0 ? `+${d}` : d}</button>
                     ))}
                   </span>
-                  <label className="mp-num">音量%
-                    <input type="number" min={0} max={200} value={Math.round((t.gain ?? 1) * 100)} onChange={e => setSong({ ...song, tracks: song.tracks.map(x => x.id === t.id ? { ...x, gain: Number(e.target.value) / 100 } : x) })} className="mp-input small" />
-                  </label>
                   <button className="mp-btn danger" onClick={async () => { await deleteAudioByUrl(t.url); setSong({ ...song, tracks: song.tracks.filter(x => x.id !== t.id) }) }}>削除</button>
                 </div>
               ))}
-              <div className="mp-admin-row">
-                <input ref={fileRef} type="file" accept="audio/*" className="mp-input" />
-                <button className="mp-btn" disabled={busy} onClick={() => { const f = fileRef.current?.files?.[0]; if (f) addTrackFile(f) }}>トラックを追加（アップロード）</button>
+              <div
+                className={`drop-zone${dragOver ? ' over' : ''}`}
+                onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={onDropFiles}
+              >
+                <div className="drop-zone-text">ここに音声ファイルをドロップしてもトラックを追加できます（複数可）</div>
+                <div className="mp-admin-row">
+                  <input
+                    ref={fileRef} type="file" accept="audio/*" multiple className="mp-input"
+                    onChange={e => { const fs = e.target.files ? [...e.target.files] : []; if (fs.length) void addTrackFiles(fs); e.target.value = '' }}
+                  />
+                  <button className="mp-btn" disabled={busy} onClick={() => { const fs = fileRef.current?.files ? [...fileRef.current.files] : []; if (fs.length) void addTrackFiles(fs) }}>トラックを追加（アップロード）</button>
+                </div>
               </div>
 
-              <p className="mp-admin-note">ずらし・音量は「保存する」を押すと確定します。保存するとプレイヤーが新しい構成で読み込み直します。</p>
+              <p className="mp-admin-note">ずらしは「保存する」を押すと確定します。保存するとプレイヤーが新しい構成で読み込み直します。</p>
 
               <div className="mp-admin-row">
                 <button className="mp-btn primary" disabled={busy} onClick={saveSong}>保存する</button>

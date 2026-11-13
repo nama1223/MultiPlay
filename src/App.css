@@ -531,55 +531,13 @@
   z-index: 5;
 }
 
-.section-list-toolbar {
-  display: flex;
-  gap: 4px;
-  margin-right: auto;
-}
-
-.sort-filter-btn {
-  font-size: 11px;
-  padding: 3px 8px;
-  background: #17362a;
-  border: 1px solid #2a5a44;
-  border-radius: 5px;
-  color: #82b294;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.sort-filter-btn.active {
-  background: #3a2a7a;
-  border-color: #7755cc;
-  color: #ccaaff;
-}
-.sort-filter-btn:hover { background: #2a2060; }
-
-.section-drag-row {
-  display: flex;
-  align-items: stretch;
-}
-.section-drag-row.drag-over {
-  border-top: 2px solid #7755cc;
-}
-.drag-handle {
-  display: flex;
-  align-items: center;
-  padding: 0 6px;
-  color: #5544aa;
-  cursor: grab;
-  font-size: 16px;
-  user-select: none;
-  flex-shrink: 0;
-}
-.drag-handle:active { cursor: grabbing; }
-
 .section-list-title {
   font-size: 12px;
   font-weight: 600;
   color: #82b294;
 }
 
-.section-list-actions { display: flex; gap: 6px; }
+.section-list-actions { display: flex; gap: 6px; margin-left: auto; }
 
 .icon-btn {
   padding: 4px 8px;
@@ -634,8 +592,6 @@
   transition: background 0.1s;
 }
 
-.section-item.excluded { opacity: 0.6; }
-
 .section-item.active {
   background: #1d4a34;
 }
@@ -665,8 +621,9 @@
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 5.5em; /* マーカー名は全角5文字程度の幅 */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -693,37 +650,6 @@
   width: 100%;
 }
 
-/* タイム＋開閉アイコンをまとめるエリア（ポートレートでは右端に配置） */
-.section-item-expand {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  gap: 6px;
-}
-.expand-icon { color: #443366; font-size: 11px; }
-
-/* ── 横長画面（PC等）: 区間名25% ／ 開閉エリア（タイム含む）75% ── */
-@media (orientation: landscape) {
-  .section-item-info {
-    flex: 0 0 25%;
-    max-width: 25%;
-    border-right: 1px solid #3a2f5e;
-    padding-right: 8px;
-    min-width: 0;
-  }
-  .section-item-expand {
-    flex: 1;
-    justify-content: center;
-    background: rgba(68, 51, 102, 0.18);
-    border-radius: 0 4px 4px 0;
-    min-height: 40px;
-  }
-  .section-item-expand .expand-icon {
-    font-size: 15px;
-    color: #9d7fd4;
-  }
-}
-
 .section-item-actions {
   padding: 0 10px 6px;
   display: flex;
@@ -742,8 +668,6 @@
 
 .action-btn.play      { background: #1e2a52; color: #7eb8f8; }
 .action-btn.download  { background: #1a3028; color: #5ecfb8; }
-.action-btn.exclude   { background: #2a1a2a; color: #e87878; }
-.action-btn.restore   { background: #1a3028; color: #5ecfb8; }
 .action-btn.normalize { background: #1a2038; color: #a0c8ff; border: 1px solid #2a3a6a; }
 .action-btn.delete    { background: #1e1e2a; color: #664455; }
 .action-btn.delete.compact { padding: 3px 12px; margin: 0; }

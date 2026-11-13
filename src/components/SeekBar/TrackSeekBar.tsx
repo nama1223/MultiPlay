@@ -13,19 +13,22 @@ interface Props {
   onSectionLabelClick: (id: string) => void
 }
 
-const LABEL_W = 64
+const LABEL_W = 46
 const STRIP_H = 22
 const LANE_H = 30
 const MIN_VIEW_H = STRIP_H + LANE_H
 const maxViewH = () => Math.round(window.innerHeight * 0.72)
+const ZOOM_LEVELS = [1, 1.5, 2, 3, 4]
 
 /**
- * MultiPlay 用シークバー。RecPlay の SeekBar の場所に置き、
- * 段（レーン）をトラック別に分け、上段に区間（マーカー）の帯を出す。
+ * MultiPlay 用シークバー。段（レーン）をトラック別に分け、上段にマーカーの帯を出す。
  * 編集モードでは帯の左端をドラッグしてマーカー位置を動かせる。
+ * ラベル列は固定で、波形列だけがズーム（＋/−）と横スクロールの対象。
+ * 再生中、再生ヘッドが見える範囲から出たら横スクロールを追いつかせる。
  */
 export function TrackSeekBar({ currentTime, duration, sections, mode, activeSectionId, onSeek, onSectionUpdate, onSectionLabelClick }: Props) {
-  const wrapRef = useRef<HTMLDivElement>(null)
+  const waveRef = useRef<HTMLDivElement>(null)
+  const hscrollRef = useRef<HTMLDivElement>(null)
   const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([])
   const drawKeyRef = useRef('')
   // レーン = 曲データ（manifest）のトラックが土台。デコード済みのトラックはエンジン側の
@@ -42,6 +45,20 @@ export function TrackSeekBar({ currentTime, duration, sections, mode, activeSect
   const sorted = [...sections].sort((a, b) => a.startTime - b.startTime)
   const endOf = (i: number) => (i + 1 < sorted.length ? sorted[i + 1].startTime : duration)
   const safeDur = Math.max(duration, 0.001)
+
+  // ── ズーム ──
+  const [zoomIdx, setZoomIdx] = useState(0)
+  const zoom = ZOOM_LEVELS[zoomIdx]
+  const [baseW, setBaseW] = useState(0)
+  useEffect(() => {
+    const el = hscrollRef.current
+    if (!el) return
+    const observer = new ResizeObserver(entries => setBaseW(entries[0].contentRect.width))
+    observer.observe(el)
+    setBaseW(el.clientWidth)
+    return () => observer.disconnect()
+  }, [])
+  const waveW = Math.max(1, Math.round(baseW * zoom))
 
   useEffect(() => {
     const key = `${lanes.length}|${duration}|${lanes.map(l => `${l.peaks.length}:${l.dur}`).join(',')}`
@@ -72,11 +89,10 @@ export function TrackSeekBar({ currentTime, duration, sections, mode, activeSect
   })
 
   const fracFromClientX = (clientX: number) => {
-    const el = wrapRef.current
+    const el = waveRef.current
     if (!el) return 0
     const rect = el.getBoundingClientRect()
-    const w = rect.width - LABEL_W
-    return Math.max(0, Math.min(1, w > 0 ? (clientX - rect.left - LABEL_W) / w : 0))
+    return Math.max(0, Math.min(1, rect.width > 0 ? (clientX - rect.left) / rect.width : 0))
   }
 
   const scrubRef = useRef(false)
@@ -109,6 +125,16 @@ export function TrackSeekBar({ currentTime, duration, sections, mode, activeSect
 
   const playFrac = duration > 0 ? currentTime / duration : 0
 
+  // 再生ヘッドが見える範囲から出たら横スクロールを追いつかせる
+  useEffect(() => {
+    const el = hscrollRef.current
+    if (!el || waveW <= el.clientWidth) return
+    const x = playFrac * waveW
+    if (x < el.scrollLeft || x > el.scrollLeft + el.clientWidth) {
+      el.scrollLeft = Math.max(0, x - el.clientWidth * 0.25)
+    }
+  }, [currentTime, waveW, playFrac])
+
   // ── 境界ドラッグ（RecPlay のシークバー高さ調整を移植） ──
   const contentH = STRIP_H + lanes.length * LANE_H
   const [viewH, setViewH] = useState<number | null>(null)
@@ -130,57 +156,79 @@ export function TrackSeekBar({ currentTime, duration, sections, mode, activeSect
 
   return (
     <div className="seekbar-container tseek">
-      <div className="tseek-scroll" style={{ height: effH }}>
-      <div
-        className="tseek-body"
-        ref={wrapRef}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endScrub}
-        style={{ height: contentH }}
-      >
-        {/* 区間（マーカー）の帯 */}
-        <div className="tseek-stripbands" style={{ left: LABEL_W, height: STRIP_H }}>
-          {sorted.map((sec, i) => (
-            <div
-              key={sec.id}
-              className={`tseek-band${sec.id === activeSectionId ? ' active' : ''}`}
-              style={{
-                left: `${(sec.startTime / safeDur) * 100}%`,
-                width: `${((endOf(i) - sec.startTime) / safeDur) * 100}%`,
-                background: `${sec.color}30`,
-                borderLeft: `2px solid ${sec.color}`,
-              }}
-              onPointerDown={(e) => onFlagPointerDown(e, sec, i)}
-            >
-              <button
-                className="tseek-bandlabel"
-                style={{ color: sec.color }}
-                onClick={(e) => { e.stopPropagation(); onSectionLabelClick(sec.id) }}
-                onPointerDown={(e) => e.stopPropagation()}
-              >
-                {sec.label}
-              </button>
-            </div>
-          ))}
-          <div className="tseek-playhead" style={{ left: `${playFrac * 100}%` }} />
-        </div>
-
-        {/* トラック名ラベル */}
-        {lanes.map((lane, i) => (
-          <span key={lane.id} className="tseek-lanelabel" style={{ top: STRIP_H + i * LANE_H, height: LANE_H, width: LABEL_W }}>
-            {lane.name}
-          </span>
-        ))}
-
-        {/* 波形レーン */}
-        <div className="tseek-canvascol" style={{ marginLeft: LABEL_W, top: STRIP_H }}>
-          {lanes.map((lane, i) => (
-            <canvas key={lane.id} ref={el => { canvasRefs.current[i] = el }} className="tseek-canvas" style={{ height: LANE_H }} />
-          ))}
-          <div className="tseek-playhead" style={{ left: `${playFrac * 100}%` }} />
-        </div>
+      <div className="tseek-zoombar">
+        <span className="tseek-zoom-label">ズーム</span>
+        <button
+          className="tseek-zoom-btn"
+          onClick={() => setZoomIdx(i => Math.max(0, i - 1))}
+          disabled={zoomIdx === 0}
+          title="縮小"
+        >−</button>
+        <span className="tseek-zoom-val">×{zoom}</span>
+        <button
+          className="tseek-zoom-btn"
+          onClick={() => setZoomIdx(i => Math.min(ZOOM_LEVELS.length - 1, i + 1))}
+          disabled={zoomIdx === ZOOM_LEVELS.length - 1}
+          title="拡大"
+        >＋</button>
       </div>
+      <div className="tseek-scroll" style={{ height: effH }}>
+        <div className="tseek-main" style={{ height: contentH }}>
+          {/* トラック名ラベル（固定列） */}
+          <div className="tseek-labelcol" style={{ width: LABEL_W }}>
+            {lanes.map((lane, i) => (
+              <span key={lane.id} className="tseek-lanelabel" style={{ top: STRIP_H + i * LANE_H, height: LANE_H, width: LABEL_W }}>
+                {lane.name}
+              </span>
+            ))}
+          </div>
+          {/* 波形列（横スクロール） */}
+          <div className="tseek-hscroll" ref={hscrollRef}>
+            <div
+              className="tseek-body"
+              ref={waveRef}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={endScrub}
+              style={{ width: waveW, height: contentH }}
+            >
+              {/* マーカーの帯 */}
+              <div className="tseek-stripbands" style={{ left: 0, height: STRIP_H }}>
+                {sorted.map((sec, i) => (
+                  <div
+                    key={sec.id}
+                    className={`tseek-band${sec.id === activeSectionId ? ' active' : ''}`}
+                    style={{
+                      left: `${(sec.startTime / safeDur) * 100}%`,
+                      width: `${((endOf(i) - sec.startTime) / safeDur) * 100}%`,
+                      background: `${sec.color}30`,
+                      borderLeft: `2px solid ${sec.color}`,
+                    }}
+                    onPointerDown={(e) => onFlagPointerDown(e, sec, i)}
+                  >
+                    <button
+                      className="tseek-bandlabel"
+                      style={{ color: sec.color }}
+                      onClick={(e) => { e.stopPropagation(); onSectionLabelClick(sec.id) }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      {sec.label}
+                    </button>
+                  </div>
+                ))}
+                <div className="tseek-playhead" style={{ left: `${playFrac * 100}%` }} />
+              </div>
+
+              {/* 波形レーン */}
+              <div className="tseek-canvascol" style={{ left: 0, top: STRIP_H }}>
+                {lanes.map((lane, i) => (
+                  <canvas key={lane.id} ref={el => { canvasRefs.current[i] = el }} className="tseek-canvas" style={{ height: LANE_H }} />
+                ))}
+                <div className="tseek-playhead" style={{ left: `${playFrac * 100}%` }} />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
       <div className="seekbar-resize-handle">
         <button

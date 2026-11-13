@@ -60,12 +60,12 @@ export default function App() {
   const {
     audioRef, currentTime, duration, isPlaying, src,
     togglePlayPause, seek, skip, playSection,
-    loadUrl, setExcludedZones, setSkipExcluded,
+    loadUrl,
     playbackRate, changePlaybackRate, loadState,
   } = useAudioPlayer()
   const [mixerKey, setMixerKey] = useState(0)
 
-  const { sections, addSection, updateSection, deleteSection, toggleExclude, importSections, reorderSections, undo, redo, undoCount, redoCount } = useSections()
+  const { sections, addSection, updateSection, deleteSection, importSections, undo, redo, undoCount, redoCount } = useSections()
   const { settings, updateSettings } = useSettings()
   // 管理者ログイン（localStorage に保存）があれば「編集」モードを解放する
   const [isAdmin, setIsAdmin] = useState(() => !!localStorage.getItem('mp_admin_token'))
@@ -136,15 +136,6 @@ export default function App() {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [screen])
-
-  useEffect(() => {
-    const excluded = sections.filter((s) => s.isExcluded).map((s) => ({ start: s.startTime, end: s.endTime }))
-    setExcludedZones(excluded)
-  }, [sections, setExcludedZones])
-
-  useEffect(() => {
-    setSkipExcluded(mode === 'play')
-  }, [mode, setSkipExcluded])
 
   const handleFileSelect = (url: string, key: string, name: string) => {
     loadUrl(url)
@@ -360,7 +351,7 @@ export default function App() {
                 />
               )}
 
-              {mode !== 'settings' && fileKey && (
+              {mode === 'play' && fileKey && (
                 <TrackMixer key={`${fileKey}:${mixerKey}`} songId={fileKey} />
               )}
 
@@ -384,7 +375,6 @@ export default function App() {
                   onPlay={playMarker}
                   onUpdate={updateSection}
                   onDelete={deleteSection}
-                  onToggleExclude={toggleExclude}
                   onActivate={setActiveSectionId}
                   scrollTarget={scrollTarget}
                   fileName={fileName}
@@ -393,7 +383,6 @@ export default function App() {
                   onRedo={redo}
                   undoCount={undoCount}
                   redoCount={redoCount}
-                  onReorder={reorderSections}
                   markerMode
                 />
               )}

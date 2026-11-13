@@ -7,13 +7,13 @@ interface Props {
   duration: number
   editAdjustValues: number[]
   onUpdate: (id: string, updates: Partial<Section>) => void
-  onClose: () => void
   onPlay: (start: number, end: number) => void
   /** マーカー（開始点だけ）として編集する */
   markerMode?: boolean
 }
 
-export function FlagEditor({ section, duration, editAdjustValues, onUpdate, onClose, onPlay, markerMode }: Props) {
+/** 選択中マーカーの編集ブロック（マーカーリスト下部に1つだけ出す） */
+export function FlagEditor({ section, duration, editAdjustValues, onUpdate, onPlay, markerMode }: Props) {
   const [startInput, setStartInput] = useState(String(section.startTime.toFixed(1)))
   const [endInput, setEndInput] = useState(String(section.endTime.toFixed(1)))
 
@@ -45,11 +45,12 @@ export function FlagEditor({ section, duration, editAdjustValues, onUpdate, onCl
     <div className="flag-editor">
       <div className="flag-editor-header">
         <span style={{ color: section.color }}>●</span>
+        <span className="flag-editor-name">{section.label}</span>
         <button
           className="flag-play-btn"
           onClick={() => onPlay(section.startTime, section.endTime)}
-          title="区間全体を再生"
-        >▶ 区間再生</button>
+          title="このマーカーから再生"
+        >▶ 再生</button>
         {!markerMode && (
         <button
           className="flag-play-btn"
@@ -57,8 +58,6 @@ export function FlagEditor({ section, duration, editAdjustValues, onUpdate, onCl
           title="終了位置の直前3秒を再生"
         >▶ ラスト3秒</button>
         )}
-        <span style={{ flex: 1 }} />
-        <button className="close-btn" onClick={onClose}>✕</button>
       </div>
 
       <div className="flag-editor-row">

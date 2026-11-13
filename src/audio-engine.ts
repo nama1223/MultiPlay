@@ -284,19 +284,11 @@ export class MultiTrackEngine {
     }
   }
 
-  /** 現在のバランス・オフセット・リバーブでオフライン書き出しして WAV を返す。除外区間は切り取って詰める */
-  async renderMixdown(mix: Record<string, MixState>, excludes: { start: number; end: number }[] = []): Promise<Blob> {
+  /** 現在のバランス・オフセット・リバーブで全体をオフライン書き出しして WAV を返す */
+  async renderMixdown(mix: Record<string, MixState>): Promise<Blob> {
     const rate = 44100
-    // 残す区間（除外の補集合）
-    const sorted = [...excludes].sort((a, b) => a.start - b.start)
-    const kept: { start: number; end: number }[] = []
-    let cursor = 0
-    for (const z of sorted) {
-      if (z.start > cursor) kept.push({ start: cursor, end: Math.min(z.start, this.duration) })
-      cursor = Math.max(cursor, z.end)
-    }
-    if (cursor < this.duration) kept.push({ start: cursor, end: this.duration })
-    const keptTotal = kept.reduce((s, k) => s + (k.end - k.start), 0)
+    const kept: { start: number; end: number }[] = [{ start: 0, end: this.duration }]
+    const keptTotal = this.duration
 
     const length = Math.ceil(keptTotal * rate) + Math.floor(rate * 0.2)
     const off = new OfflineAudioContext(2, length, rate)

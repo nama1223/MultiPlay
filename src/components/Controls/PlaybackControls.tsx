@@ -46,7 +46,6 @@ export function PlaybackControls({
   const handleBack = () => {
     const threshold = currentTime - 0.5
     const prev = sections
-      .filter((s) => mode !== 'play' || !s.isExcluded)
       .map((s) => s.startTime)
       .filter((t) => t < threshold)
       .sort((a, b) => b - a)[0]
@@ -126,7 +125,7 @@ export function PlaybackControls({
   return (
     <div className="controls-area">
       <div className="playback-controls">
-        <button className="skip-btn back-btn" onClick={handleBack} title="前の区間開始位置へ">⏮</button>
+        <button className="skip-btn back-btn" onClick={handleBack} title="前のマーカー位置へ">⏮</button>
         {negatives.map((v) => (
           <button key={v} className="skip-btn" onClick={() => onSkip(v)}>{label(v)}</button>
         ))}
@@ -165,7 +164,7 @@ export function PlaybackControls({
               )}
             </>
           ) : (
-            <span className="mark-hint">区間リストの区間を選択すると位置を設定できます</span>
+            <span className="mark-hint">マーカーリストのマーカーを選択すると位置を設定できます</span>
           )}
         </div>
       )}
