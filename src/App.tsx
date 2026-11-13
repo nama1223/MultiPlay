@@ -15,6 +15,7 @@ import { AdminPage } from './components/AdminPage'
 import { TrackMixer } from './components/TrackMixer'
 import { SongEditPanel } from './components/SongEditPanel'
 import { AudioCachePanel } from './components/AudioCachePanel'
+import { PwaInstallButton } from './components/PwaInstallButton'
 import { formatTime } from './utils/timeFormat'
 import { AppMode, Section } from './types'
 import { buildAppShareUrl, indexUrl } from './config'
@@ -62,6 +63,7 @@ export default function App() {
     togglePlayPause, seek, skip, playSection,
     loadUrl,
     playbackRate, changePlaybackRate, loadState,
+    pitchKeep, setPitchKeep, pendingRate, confirmRateChange, rateProcessing, rateError,
   } = useAudioPlayer()
   const [mixerKey, setMixerKey] = useState(0)
 
@@ -321,6 +323,45 @@ export default function App() {
                 </div>
               )}
 
+              {pendingRate !== null && !rateProcessing && loadState.status === 'ready' && (
+                <div className="mp-rate-banner" role="alert">
+                  <div className="mp-rate-banner-text">
+                    速度変更を確定しますか？
+                    <span className="mp-rate-banner-detail">
+                      {Math.round(pendingRate * 100)}%・ピッチ維持（確定するまで今の速度で再生します）
+                    </span>
+                  </div>
+                  <button className="mp-btn primary mp-rate-confirm" onClick={confirmRateChange}>確定する</button>
+                </div>
+              )}
+
+              {rateError && !rateProcessing && (
+                <div className="mp-rate-banner mp-rate-banner-error">
+                  <div className="mp-rate-banner-text">
+                    速度変更の準備に失敗しました
+                    <span className="mp-rate-banner-detail">{rateError}</span>
+                  </div>
+                </div>
+              )}
+
+              {rateProcessing && (
+                <div className="mp-loading-overlay">
+                  <div className="mp-loading-box">
+                    <div className="mp-loading-title">速度変更を準備中…</div>
+                    <div className="mp-loading-phase">
+                      ピッチを保ったまま音声を作り直しています
+                      {rateProcessing.total > 0 && `（${rateProcessing.done} / ${rateProcessing.total} トラック）`}
+                    </div>
+                    <div className="mp-gauge">
+                      {rateProcessing.total > 0
+                        ? <div className="mp-gauge-fill" style={{ width: `${Math.round((rateProcessing.done / rateProcessing.total) * 100)}%` }} />
+                        : <div className="mp-gauge-fill indeterminate" />}
+                    </div>
+                    <div className="mp-loading-note">終わるまで今の速度で再生が続きます</div>
+                  </div>
+                </div>
+              )}
+
               <TrackSeekBar
                 currentTime={currentTime}
                 duration={duration}
@@ -391,8 +432,15 @@ export default function App() {
 
               {mode === 'settings' && (
                 <>
-                  <SettingsPanel settings={settings} onUpdate={updateSettings} />
+                  <SettingsPanel settings={settings} onUpdate={updateSettings} pitchKeep={pitchKeep} onPitchKeepChange={setPitchKeep} />
                   <AudioCachePanel />
+                  <div className="cache-panel mp-install-panel">
+                    <div className="cache-panel-title">アプリとしてインストール</div>
+                    <p className="cache-panel-text">
+                      ホーム画面に追加すると、アプリのようにすぐ開けます。
+                    </p>
+                    <PwaInstallButton />
+                  </div>
                 </>
               )}
             </div>

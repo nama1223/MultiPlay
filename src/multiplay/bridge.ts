@@ -1,8 +1,14 @@
 import { MultiTrackEngine } from '../audio-engine'
+import { FIXTURES } from '../config'
 import type { MpSongManifest } from './types'
 
 /** プレイヤーフック・波形フック・ミキサーで共有するエンジンと現在の曲 */
 export const engine = new MultiTrackEngine()
+
+// フィクスチャビルドでのみ、検証用にエンジンを露出する（本番ビルドでは無効）
+if (FIXTURES) {
+  ;(window as unknown as { __mpEngine?: MultiTrackEngine }).__mpEngine = engine
+}
 
 let currentManifest: MpSongManifest | null = null
 export function setCurrentManifest(m: MpSongManifest | null) { currentManifest = m }

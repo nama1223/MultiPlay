@@ -4,6 +4,9 @@ import { AppSettings, DEFAULT_SETTINGS } from '../types'
 interface Props {
   settings: AppSettings
   onUpdate: (updates: Partial<AppSettings>) => void
+  /** ピッチを維持する（時間伸縮）トグル。再生フック側で保持する */
+  pitchKeep?: boolean
+  onPitchKeepChange?: (v: boolean) => void
 }
 
 function ValuesEditor({
@@ -48,7 +51,7 @@ function ValuesEditor({
   )
 }
 
-export function SettingsPanel({ settings, onUpdate }: Props) {
+export function SettingsPanel({ settings, onUpdate, pitchKeep, onPitchKeepChange }: Props) {
   const [tutorialBtn, setTutorialBtn] = useState<boolean>(
     () => (window as unknown as { NamaTutorial?: { isButtonVisible?: () => boolean } }).NamaTutorial?.isButtonVisible?.() ?? true,
   )
@@ -67,6 +70,24 @@ export function SettingsPanel({ settings, onUpdate }: Props) {
         values={settings.editAdjustValues}
         onChange={(vals) => onUpdate({ editAdjustValues: vals })}
       />
+
+      {onPitchKeepChange && (
+        <div className="settings-group">
+          <label className="settings-label">再生速度</label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={pitchKeep ?? true}
+              onChange={(e) => onPitchKeepChange(e.target.checked)}
+            />
+            ピッチを維持する
+          </label>
+          <span className="settings-hint">
+            ON: 速度を変えても音程は変わりません。速度を変えたら「確定する」を押すと、少し待ってから新しい速度になります。
+            OFF: その場で速度が変わりますが、音程も一緒に変わります。
+          </span>
+        </div>
+      )}
 
       <button
         className="reset-btn"

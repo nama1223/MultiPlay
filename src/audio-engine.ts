@@ -1,4 +1,5 @@
 import { fetchAudioBuffer } from './multiplay/audioCache'
+import { stretchBuffer } from './multiplay/stretch'
 
 export interface TrackDef {
   id: string
@@ -97,6 +98,13 @@ export class MultiTrackEngine {
   duration = 0
   playing = false
   rate = 1
+  /**
+   * 現在ロード中のバッファが時間伸縮済みのとき、その伸縮テンポ（= 適用中の速度）。
+   * 0 = 伸縮なし（原音バッファ＋ playbackRate で速度を出す従来方式）。
+   * 位置・総尺・オフセットは常に「元のタイムライン」の秒で扱い、
+   * バッファ内位置への変換だけをこの値で行う。
+   */
+  stretchTempo = 0
   onEnded: (() => void) | null = null
   private startedAtCtx = 0
   private startPos = 0
@@ -150,11 +158,70 @@ export class MultiTrackEngine {
       done++
       onProgress?.(done, defs.length)
     }
-    this.duration = this.tracks.length
-      ? Math.max(...this.tracks.map(t => t.buffer.duration + (t.def.offsetMs ?? 0) / 1000))
-      : 0
+    this.stretchTempo = 0
+    this.recalcDuration()
     this.pausedPos = 0
     this.playing = false
+  }
+
+  /** 総尺（元のタイムラインの秒）を再計算する。伸縮中はバッファ尺を原尺へ戻して足す */
+  private recalcDuration() {
+    const scale = this.stretchTempo || 1
+    this.duration = this.tracks.length
+      ? Math.max(...this.tracks.map(t => t.buffer.duration * scale + (t.def.offsetMs ?? 0) / 1000))
+      : 0
+  }
+
+  /** 元タイムラインの秒 → そのトラックのバッファ内秒への換算係数 */
+  private bufferScale(): number {
+    return this.stretchTempo ? this.stretchTempo : 1
+  }
+
+  /**
+   * 全トラックを原音から取り直して（tempo 指定時は時間伸縮して）バッファを原子的に差し替える。
+   * tempo = null なら原音のまま（伸縮解除）。差し替え中も再生は旧バッファで続き、
+   * 完了時に元のタイムライン上の同じ位置・同じ再生状態で再開する。
+   * 原音バッファはトラックごとにデコード→（伸縮）→解放し、保持するのは差し替え後の集合だけ。
+   */
+  async rebuildBuffers(
+    tempo: number | null,
+    resolveUrl: (url: string) => string,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<void> {
+    const ctx = this.ensureCtx()
+    const defs = this.tracks.map(t => t.def)
+    const newBuffers: AudioBuffer[] = []
+    let done = 0
+    for (const def of defs) {
+      let ab: ArrayBuffer
+      try {
+        ab = await fetchAudioBuffer(resolveUrl(def.url))
+      } catch (e) {
+        throw new Error(`音声の取得に失敗: ${def.name} (${e instanceof Error ? e.message : String(e)})`)
+      }
+      const decoded = await ctx.decodeAudioData(ab)
+      // decoded（原音）は伸縮結果を作ったらこのループで手放す（参照を残さない）
+      newBuffers.push(tempo && Math.abs(tempo - 1) > 1e-9 ? stretchBuffer(ctx, decoded, tempo) : decoded)
+      done++
+      onProgress?.(done, defs.length)
+      // UI のゲージ更新と GC のために1拍譲る
+      await new Promise(r => setTimeout(r, 0))
+    }
+
+    // ── 原子的な差し替え ──
+    const wasPlaying = this.playing
+    const pos = this.position()
+    this.stopSources()
+    this.tracks.forEach((t, i) => {
+      t.buffer = newBuffers[i]
+      t.peaks = computePeaks(newBuffers[i])
+    })
+    this.stretchTempo = tempo && Math.abs(tempo - 1) > 1e-9 ? tempo : 0
+    this.rate = tempo ?? 1
+    this.recalcDuration()
+    this.pausedPos = Math.min(pos, this.duration)
+    this.playing = false
+    if (wasPlaying) this.play(this.pausedPos)
   }
 
   private stopSources() {
@@ -172,9 +239,13 @@ export class MultiTrackEngine {
     return Math.min(this.duration, this.startPos + (this.ctx.currentTime - this.startedAtCtx) * this.rate)
   }
 
-  /** 再生速度を変更する（バッファ再生のためピッチも変わる） */
+  /** 再生速度を変更する（バッファ再生のためピッチも変わる）。伸縮中は rebuildBuffers が速度を所有するので触らない */
   setRate(r: number) {
     const clamped = Math.max(0.5, Math.min(2, r))
+    if (this.stretchTempo) {
+      if (clamped === this.stretchTempo) this.rate = clamped
+      return
+    }
     if (this.playing && this.ctx) {
       this.startPos = this.position()
       this.startedAtCtx = this.ctx.currentTime
@@ -198,13 +269,15 @@ export class MultiTrackEngine {
   mixPeaks(buckets = 1200): Float32Array {
     const out = new Float32Array(buckets)
     if (this.duration <= 0) return out
+    const scale = this.bufferScale()
     for (let b = 0; b < buckets; b++) {
       const t = (b / buckets) * this.duration
       let max = 0
       for (const tr of this.tracks) {
         const off = (tr.def.offsetMs ?? 0) / 1000
-        if (t < off || t > off + tr.buffer.duration) continue
-        const idx = Math.min(tr.peaks.length - 1, Math.floor(((t - off) / tr.buffer.duration) * tr.peaks.length))
+        const span = tr.buffer.duration * scale // 元タイムライン換算のトラック尺
+        if (t < off || t > off + span) continue
+        const idx = Math.min(tr.peaks.length - 1, Math.floor(((t - off) / span) * tr.peaks.length))
         if (tr.peaks[idx] > max) max = tr.peaks[idx]
       }
       out[b] = max
@@ -218,14 +291,17 @@ export class MultiTrackEngine {
     const pos = fromSec ?? this.position()
     this.stopSources()
     const when = ctx.currentTime + 0.08
+    const scale = this.bufferScale()
     for (const t of this.tracks) {
       const offsetSec = (t.def.offsetMs ?? 0) / 1000
       const src = ctx.createBufferSource()
       src.buffer = t.buffer
       src.connect(t.gainNode)
-      if (pos >= offsetSec + t.buffer.duration) continue
-      src.playbackRate.value = this.rate
-      if (pos >= offsetSec) src.start(when, pos - offsetSec)
+      // トラックの終了位置は元タイムライン換算（伸縮中はバッファ尺 × テンポ）
+      if (pos >= offsetSec + t.buffer.duration * scale) continue
+      // 伸縮済みバッファは等速で鳴らす（速度は伸縮そのものが担う）
+      src.playbackRate.value = this.stretchTempo ? 1 : this.rate
+      if (pos >= offsetSec) src.start(when, (pos - offsetSec) / scale)
       else src.start(when + (offsetSec - pos) / this.rate)
       this.sources.push(src)
     }
@@ -287,8 +363,11 @@ export class MultiTrackEngine {
   /** 現在のバランス・オフセット・リバーブで全体をオフライン書き出しして WAV を返す */
   async renderMixdown(mix: Record<string, MixState>): Promise<Blob> {
     const rate = 44100
-    const kept: { start: number; end: number }[] = [{ start: 0, end: this.duration }]
-    const keptTotal = this.duration
+    // 書き出しはバッファのタイムラインで計算する（伸縮中は元タイムライン ÷ テンポ）。
+    // ロード中のバッファを使うので、適用中の速度・ピッチ維持がそのまま書き出される。
+    const ts = this.bufferScale()
+    const kept: { start: number; end: number }[] = [{ start: 0, end: this.duration / ts }]
+    const keptTotal = this.duration / ts
 
     const length = Math.ceil(keptTotal * rate) + Math.floor(rate * 0.2)
     const off = new OfflineAudioContext(2, length, rate)
@@ -311,7 +390,7 @@ export class MultiTrackEngine {
       for (const t of this.tracks) {
         const g = this.effectiveGain(t.def.id, mix)
         if (g <= 0) continue
-        const offSec = (t.def.offsetMs ?? 0) / 1000
+        const offSec = (t.def.offsetMs ?? 0) / 1000 / ts
         const localStart = Math.max(0, seg.start - offSec)
         const localEnd = Math.min(t.buffer.duration, seg.end - offSec)
         if (localEnd <= localStart) continue

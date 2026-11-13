@@ -55,6 +55,23 @@
 .cache-panel { margin: 10px; border: 1px solid #2a5a44; border-radius: 10px; background: #17362a; padding: 12px; }
 .cache-panel-title { font-size: 13px; font-weight: 700; color: #63e6a4; margin-bottom: 6px; }
 .cache-panel-text { font-size: 12px; color: #a9d9bd; margin: 0 0 6px; line-height: 1.6; }
+.cache-cap-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.cache-cap-label { font-size: 12px; color: #a9d9bd; }
+.cache-cap-input { width: 90px; padding: 7px 8px; border-radius: 8px; border: 1px solid #2a5a44; background: #10241b; color: #eeeeff; font-size: 14px; }
+.cache-cap-unit { font-size: 12px; color: #a9d9bd; margin-left: -4px; }
+
+/* 速度変更の確定待ちバナー（プレイヤー上部） */
+.mp-rate-banner { margin: 10px 10px 0; border: 1px solid #8a6d2f; border-radius: 10px; background: #3a2f14; padding: 12px; display: flex; align-items: center; gap: 12px; }
+.mp-rate-banner-text { flex: 1; font-size: 16px; font-weight: 700; color: #ffe9a8; line-height: 1.4; }
+.mp-rate-banner-detail { display: block; font-size: 12px; font-weight: 400; color: #d9c98a; margin-top: 2px; }
+.mp-rate-confirm { font-size: 15px; padding: 12px 20px; flex-shrink: 0; }
+.mp-rate-banner-error { border-color: #8a3a5a; background: #3a1a28; }
+.mp-rate-banner-error .mp-rate-banner-text { color: #ffb0c0; }
+.mp-rate-banner-error .mp-rate-banner-detail { color: #d98aa5; }
+
+/* インストール済みボタン（消さずに無効表示し続ける） */
+.pwa-installed-btn { background: #1d4a34 !important; border-color: #2a5a44 !important; color: #63e6a4 !important; opacity: 0.85; }
+.mp-install-panel .pwa-install-btn { margin-top: 4px; }
 
 /* 曲一覧での新規作成（管理者） */
 .file-create { margin: 18px 10px 0; border: 1px dashed #2a5a44; border-radius: 10px; padding: 12px; background: rgba(23, 54, 42, 0.5); }
