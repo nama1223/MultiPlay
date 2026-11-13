@@ -509,6 +509,44 @@
   padding: 4px 0;
 }
 
+/* ── 範囲バー（マーカーリストの直上。終了マーカーとループの指定） ── */
+.range-bar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  background: #101d15;
+  border-top: 1px solid #1b3327;
+  border-bottom: 1px solid #1b3327;
+  font-size: 12px;
+  color: #a9d9bd;
+}
+.range-bar-caption { color: #82b294; font-weight: 700; flex-shrink: 0; }
+.range-bar-start { font-weight: 700; color: #eafff2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 8em; }
+.range-bar-arrow { color: #82b294; flex-shrink: 0; }
+.range-bar-select {
+  flex: 1;
+  min-width: 0;
+  background: #17362a;
+  color: #eafff2;
+  border: 1px solid #2a5a44;
+  border-radius: 6px;
+  font-size: 12px;
+  padding: 4px 6px;
+}
+.range-loop-chip {
+  flex-shrink: 0;
+  border: 1px solid #2a5a44;
+  background: #1d4a34;
+  color: #a9d9bd;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.range-loop-chip.on { background: #63e6a4; color: #0c2417; border-color: #63e6a4; }
+
 /* ── Section List ── */
 .section-list {
   flex: 1;          /* ← take remaining space after seekbar */

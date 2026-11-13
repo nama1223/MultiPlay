@@ -17,9 +17,9 @@ export function resolveTrackUrl(url: string): string {
   return `${API_BASE}${url.startsWith('/') ? '' : '/'}${url}`
 }
 
-/** 曲の共有URL（?song= 形式） */
+/** 曲の共有URL（?song= 形式）。LINE 内ブラウザから外部ブラウザで開かせる指定も付ける（RecPlay と同じ） */
 export function buildAppShareUrl(songId: string): string {
   const origin = window.location.origin
   const path = window.location.pathname.replace(/\/?$/, '/')
-  return `${origin}${path}?song=${encodeURIComponent(songId)}`
+  return `${origin}${path}?song=${encodeURIComponent(songId)}&openExternalBrowser=1`
 }

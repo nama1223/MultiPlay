@@ -120,7 +120,7 @@ export function TrackMixer({ songId }: { songId: string }) {
     <div className="track-mixer">
       <button className="track-mixer-head" onClick={toggleOpen} aria-expanded={open}>
         <span className="track-mixer-title">トラック音量</span>
-        <span className="head-state">{open ? '▲ 畳む' : '▼ 開く'}</span>
+        <span className="head-state">{open ? '▼ 畳む' : '▲ 開く'}</span>
       </button>
       {open && (
         <div className="track-mixer-body">

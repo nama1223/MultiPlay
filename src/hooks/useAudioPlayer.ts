@@ -73,19 +73,32 @@ export function useAudioPlayer() {
   }, [])
 
   const sectionEndRef = useRef<number | null>(null)
+  /** 範囲ループ再生が有効な間だけ {開始, 終了} を持つ（終了位置は sectionEndRef と一致させる） */
+  const sectionLoopRef = useRef<{ start: number; end: number } | null>(null)
 
   // 再生位置のポーリング（マーカー再生の終了位置もここで見る）
   useEffect(() => {
+    let prev = 0
     const id = setInterval(() => {
       const t = engine.position()
       setCurrentTime(t)
       setIsPlaying(engine.playing)
-      if (!engine.playing) return
-      if (sectionEndRef.current !== null && t >= sectionEndRef.current) {
+      if (!engine.playing) { prev = t; return }
+      const end = sectionEndRef.current
+      // 終了位置を「跨いだ」瞬間だけ反応する（終了より後ろから再生し直した時に巻き戻らないように）
+      if (end !== null && prev < end && t >= end) {
+        const loop = sectionLoopRef.current
+        if (loop && loop.end === end) {
+          engine.seek(loop.start)
+          prev = loop.start
+          setCurrentTime(loop.start)
+          return
+        }
         engine.pause()
         sectionEndRef.current = null
-        return
+        sectionLoopRef.current = null
       }
+      prev = t
     }, 100)
     return () => clearInterval(id)
   }, [])
@@ -108,9 +121,10 @@ export function useAudioPlayer() {
     setCurrentTime(engine.position())
   }, [])
 
-  const playSection = useCallback((startTime: number, endTime: number) => {
+  const playSection = useCallback((startTime: number, endTime: number, opts?: { loop?: boolean }) => {
     if (!loadReadyRef.current) return
     sectionEndRef.current = endTime
+    sectionLoopRef.current = opts?.loop ? { start: startTime, end: endTime } : null
     engine.play(startTime)
     setIsPlaying(true)
   }, [])
@@ -216,6 +230,7 @@ export function useAudioPlayer() {
     setDuration(0)
     setRateError('')
     sectionEndRef.current = null
+    sectionLoopRef.current = null
     loadReadyRef.current = false
     setLoadState({ status: 'loading', phase: '曲データを取得中…', done: 0, total: 0, error: '' })
     ;(async () => {

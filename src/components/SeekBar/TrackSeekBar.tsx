@@ -257,6 +257,24 @@ export function TrackSeekBar({ currentTime, duration, sections, mode, activeSect
                     </button>
                   </div>
                 ))}
+                {/* 再生モードではマーカーの旗をタップすると、そのマーカーの頭へ正確に飛ぶ。
+                    旗の上では波形のスクラブを始めない（stopPropagation） */}
+                {mode !== 'edit' && sorted.map((sec) => (
+                  <div
+                    key={`flag-${sec.id}`}
+                    className={`tseek-flag${sec.id === activeSectionId ? ' active' : ''}`}
+                    style={{ left: `${(sec.startTime / safeDur) * 100}%` }}
+                    title={`${sec.label} の頭へ移動`}
+                    onPointerDown={(e) => {
+                      e.stopPropagation()
+                      onSeek(sec.startTime)
+                      onSectionLabelClick(sec.id)
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <span className="tseek-flag-pennant" style={{ background: sec.color }} />
+                  </div>
+                ))}
                 <div className="tseek-playhead" style={{ left: `${playFrac * 100}%` }} />
               </div>
 
@@ -280,7 +298,7 @@ export function TrackSeekBar({ currentTime, duration, sections, mode, activeSect
           className="resize-extreme-btn"
           onClick={() => setViewH(MIN_VIEW_H)}
           title="波形エリアを最小にする"
-        >▼ 最小</button>
+        >▲ 最小</button>
         <div
           className="resize-drag-zone"
           onPointerDown={handleResizeStart}
@@ -293,7 +311,7 @@ export function TrackSeekBar({ currentTime, duration, sections, mode, activeSect
           className="resize-extreme-btn"
           onClick={() => setViewH(Math.min(contentH, maxViewH()))}
           title="波形エリアを全トラック分まで広げる"
-        >▲ 最大</button>
+        >▼ 最大</button>
       </div>
     </div>
   )
