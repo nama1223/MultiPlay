@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
-import { engine, setCurrentManifest } from '../multiplay/bridge'
+import { engine, setCurrentManifest, getCurrentManifest, getCurrentMix } from '../multiplay/bridge'
 import { songUrl, resolveTrackUrl } from '../config'
 import type { MpSongManifest } from '../multiplay/types'
 
@@ -283,6 +283,44 @@ export function useAudioPlayer() {
     })()
   }, [])
 
+  /**
+   * 曲データ編集の構造変更を、読み込み済みバッファへの差分適用で反映する。
+   * 並べ替え・削除・オフセット変更では取得・デコードは走らず、追加トラック分だけ読み込む。
+   * 差分で処理しきれない場合は全トラック再構築へフォールバックする（正しさ優先）。
+   */
+  const applyCurrentManifest = useCallback(async (): Promise<void> => {
+    const manifest = getCurrentManifest()
+    if (!manifest || !loadReadyRef.current) return
+    const tempoBefore = engine.stretchTempo
+    try {
+      await engine.applyStructure(manifest.tracks, resolveTrackUrl)
+    } catch (e) {
+      console.error('差分適用に失敗したため全再構築します', e)
+      try {
+        await engine.load(manifest.tracks, resolveTrackUrl)
+        if (tempoBefore) {
+          // 伸縮が有効だった状態を復元する
+          await engine.rebuildBuffers(tempoBefore, resolveTrackUrl)
+          appliedRateRef.current = tempoBefore
+          appliedModeRef.current = 'stretch'
+          setAppliedRate(tempoBefore)
+        } else {
+          engine.setRate(playbackRateRef.current)
+          appliedRateRef.current = playbackRateRef.current
+          appliedModeRef.current = 'rate'
+          setAppliedRate(playbackRateRef.current)
+        }
+      } catch (e2) {
+        console.error('全再構築にも失敗', e2)
+        setLoadState({ status: 'error', phase: '', done: 0, total: 0, error: e2 instanceof Error ? e2.message : String(e2) })
+        return
+      }
+    }
+    engine.applyMix(getCurrentMix())
+    setDuration(engine.duration)
+    setCurrentTime(engine.position())
+  }, [])
+
   const changePlaybackRate = useCallback((delta: number) => {
     const next = Math.round((playbackRateRef.current + delta) * 100) / 100
     const clamped = Math.max(RATE_MIN, Math.min(RATE_MAX, next))
@@ -316,6 +354,7 @@ export function useAudioPlayer() {
     clearRange,
     loadFile,
     loadUrl,
+    applyCurrentManifest,
     loadState,
     changePlaybackRate,
     pitchKeep,

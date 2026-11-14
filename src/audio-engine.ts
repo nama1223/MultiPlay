@@ -164,6 +164,78 @@ export class MultiTrackEngine {
     this.playing = false
   }
 
+  /**
+   * 構造変更（並べ替え・追加・削除・オフセット変更）を差分だけで反映する。
+   * id+URL が一致するトラックはデコード済みバッファを再利用するので、
+   * 並べ替え・オフセット変更では取得もデコードも走らない。新しく増えた
+   * トラックだけを取得・デコードする（伸縮中のバッファが有効な間は、
+   * 追加分も同じテンポで伸縮して揃える）。削除はバッファを外すだけ。
+   * 差し替えは原子的: 新規分の準備が全部終わってから入れ替えるので、
+   * 途中で失敗しても現在の再生状態は壊れない（呼び出し側は全再構築へ
+   * フォールバックできる）。
+   */
+  async applyStructure(
+    defs: TrackDef[],
+    resolveUrl: (url: string) => string,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<void> {
+    const ctx = this.ensureCtx()
+    const tempo = this.stretchTempo
+    const keyOf = (d: TrackDef) => `${d.id}\n${d.url}`
+    const reusable = new Map<string, LoadedTrack>()
+    for (const t of this.tracks) reusable.set(keyOf(t.def), t)
+    const used = new Set<LoadedTrack>()
+    const pendingDefs: [LoadedTrack, TrackDef][] = []
+    const next: LoadedTrack[] = []
+    let done = 0
+    try {
+      for (const def of defs) {
+        const hit = reusable.get(keyOf(def))
+        if (hit && !used.has(hit)) {
+          used.add(hit)
+          pendingDefs.push([hit, def])
+          next.push(hit)
+        } else {
+          let ab: ArrayBuffer
+          try {
+            ab = await fetchAudioBuffer(resolveUrl(def.url))
+          } catch (e) {
+            throw new Error(`音声の取得に失敗: ${def.name} (${e instanceof Error ? e.message : String(e)})`)
+          }
+          const decoded = await ctx.decodeAudioData(ab)
+          // 伸縮中は追加分も同じテンポで伸縮し、原音バッファは手放す
+          const buffer = tempo ? stretchBuffer(ctx, decoded, tempo) : decoded
+          const gainNode = ctx.createGain()
+          gainNode.gain.value = def.gain ?? 1
+          gainNode.connect(this.bus!)
+          next.push({ def, buffer, gainNode, peaks: computePeaks(buffer) })
+        }
+        done++
+        onProgress?.(done, defs.length)
+      }
+    } catch (e) {
+      // 作りかけの新規トラックだけ片付ける（既存の再生状態には触っていない）
+      for (const t of next) {
+        if (!used.has(t)) { try { t.gainNode.disconnect() } catch { /* noop */ } }
+      }
+      throw e
+    }
+
+    // ── 原子的な差し替え ──
+    const wasPlaying = this.playing
+    const pos = this.position()
+    this.stopSources()
+    for (const t of this.tracks) if (!used.has(t)) { try { t.gainNode.disconnect() } catch { /* noop */ } }
+    // 再利用トラックの定義（名前・ずらし・ゲイン）は新しいものへ。再生スケジューリング時に
+    // 読まれる値なので、バッファの再デコードは要らない
+    for (const [t, d] of pendingDefs) t.def = d
+    this.tracks = next
+    this.recalcDuration()
+    this.pausedPos = Math.min(pos, this.duration)
+    this.playing = false
+    if (wasPlaying) this.play(this.pausedPos)
+  }
+
   /** 総尺（元のタイムラインの秒）を再計算する。伸縮中はバッファ尺を原尺へ戻して足す */
   private recalcDuration() {
     const scale = this.stretchTempo || 1

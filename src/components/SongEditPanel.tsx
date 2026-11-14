@@ -12,19 +12,22 @@ const roundPeaks = (peaks: number[]) => peaks.map(v => Math.round(v * 1000) / 10
 const newId = (p: string) => `${p}${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`
 
 const SAVE_DEBOUNCE_MS = 1500
+/** 構造変更の反映は、最後の変更からこの時間だけ静かになってから1回にまとめて行う */
+const APPLY_QUIET_MS = 1200
 const TRACK_ROW_H = 40
 
 interface Props {
   songId: string
   isPlaying: boolean
-  /** 構成変更（トラック追加/削除/並べ替え/ずらし）をプレイヤーへ反映するためのリロード依頼 */
-  onSaved: (newTitle: string) => void
+  /** 構成変更（トラック追加/削除/並べ替え/ずらし）のプレイヤーへの反映（差分適用）の実行。完了まで待てるよう Promise を返す */
+  onSaved: (newTitle: string) => void | Promise<void>
   /** タイトルだけの保存完了通知（ヘッダ表示の追随用、リロードなし） */
   onTitleSaved: (newTitle: string) => void
   onDeleted: () => void
 }
 
 type SyncPhase = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
+type ApplyPhase = 'idle' | 'waiting' | 'applying'
 
 /** プレイヤー（エンジン）へ再読み込みが必要な「構成」の署名 */
 function structuralSig(m: MpSongManifest): string {
@@ -36,7 +39,8 @@ function engineSig(): string {
 
 /**
  * 曲データの編集パネル。変更はマーカーと同じ方式で自動保存する（デバウンス付き）。
- * 構成変更は停止中なら自動リロードで反映し、再生中は停止するまで保留する。
+ * 構成変更のプレイヤーへの反映は差分適用で、最後の変更から少し静かになってから
+ * 1回にまとめて行う（再生中は停止するまで保留する）。
  */
 export function SongEditPanel({ songId, isPlaying, onSaved, onTitleSaved, onDeleted }: Props) {
   const [open, setOpen] = useState(false)
@@ -46,6 +50,7 @@ export function SongEditPanel({ songId, isPlaying, onSaved, onTitleSaved, onDele
   const [armDelete, setArmDelete] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [syncPhase, setSyncPhase] = useState<SyncPhase>('idle')
+  const [applyPhase, setApplyPhase] = useState<ApplyPhase>('idle')
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
   const [pendingApply, setPendingApply] = useState(false)
   const [armTrackId, setArmTrackId] = useState<string | null>(null)
@@ -60,12 +65,71 @@ export function SongEditPanel({ songId, isPlaying, onSaved, onTitleSaved, onDele
   const savingRef = useRef(false)
   const saveAgainRef = useRef(false)
   const armTrackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const applyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const applyRunningRef = useRef(false)
+  /** プレイヤーへ未反映の構造変更が残っているか（アンマウント時の掃除と開き直した時の整合に使う） */
+  const applyNeededRef = useRef(false)
   const isPlayingRef = useRef(isPlaying)
   isPlayingRef.current = isPlaying
   const onSavedRef = useRef(onSaved)
   onSavedRef.current = onSaved
   const onTitleSavedRef = useRef(onTitleSaved)
   onTitleSavedRef.current = onTitleSaved
+
+  // ── 構造変更の反映の調停 ────────────────────────────────────────
+  // 保存のたびに即反映すると、連続編集で再構築が連発する。最後の構造変更から
+  // APPLY_QUIET_MS 静かになるまで待ち、溜まった差分を1回の差分適用にまとめる。
+  const requestApply = () => {
+    applyNeededRef.current = true
+    setApplyPhase('waiting')
+    if (applyTimerRef.current) clearTimeout(applyTimerRef.current)
+    applyTimerRef.current = setTimeout(() => { applyTimerRef.current = null; void runApplyRef.current() }, APPLY_QUIET_MS)
+  }
+
+  const runApply = async () => {
+    if (applyRunningRef.current) return
+    if (applyTimerRef.current) { clearTimeout(applyTimerRef.current); applyTimerRef.current = null }
+    const atStart = songRef.current
+    if (!atStart) return
+    const sigAtStart = structuralSig(atStart)
+    applyRunningRef.current = true
+    setApplyPhase('applying')
+    try {
+      await onSavedRef.current(atStart.title)
+    } catch { /* 反映側でフォールバックとエラー表示まで処理される */ }
+    applyRunningRef.current = false
+    setApplyPhase('idle')
+    const cur = songRef.current
+    if (cur && structuralSig(cur) !== sigAtStart && structuralSig(cur) !== engineSig()) {
+      // 反映の最中にさらに構造変更が保存されていたら、その分だけもう一度回す
+      applyNeededRef.current = true
+      if (isPlayingRef.current) setPendingApply(true)
+      else requestApply()
+    } else if (cur && structuralSig(cur) === engineSig()) {
+      applyNeededRef.current = false
+      setPendingApply(false)
+    }
+    // 反映できなかった（プレイヤー未準備など）場合は applyNeededRef を残し、
+    // パネルを開き直した時や閉じる時の掃除で再試行する（タイマーで回し続けない）
+  }
+  const runApplyRef = useRef(runApply)
+  runApplyRef.current = runApply
+
+  // パネルが閉じられる（モード切替でアンマウント）時に反映待ちが残っていたら、その場で反映しておく
+  useEffect(() => () => {
+    if (applyTimerRef.current) clearTimeout(applyTimerRef.current)
+    if (applyNeededRef.current && !applyRunningRef.current && !isPlayingRef.current) {
+      void onSavedRef.current(songRef.current?.title ?? '')
+    }
+  }, [])
+
+  /** 読み込んだマニフェストとエンジンの構成がずれていたら反映を予約する（開き直した時の整合） */
+  const reconcileAfterLoad = (m: MpSongManifest) => {
+    if (structuralSig(m) === engineSig()) return
+    applyNeededRef.current = true
+    if (isPlayingRef.current) setPendingApply(true)
+    else requestApply()
+  }
 
   // ── 初期読み込み（パネルのローカル状態はここでだけ作る。以後のリロードで巻き戻さない） ──
   useEffect(() => {
@@ -77,6 +141,7 @@ export function SongEditPanel({ songId, isPlaying, onSaved, onTitleSaved, onDele
       const clone = JSON.parse(JSON.stringify(cur)) as MpSongManifest
       savedJsonRef.current = JSON.stringify(clone)
       setSong(clone)
+      reconcileAfterLoad(clone)
       return
     }
     fetchSongFresh(songId)
@@ -84,6 +149,7 @@ export function SongEditPanel({ songId, isPlaying, onSaved, onTitleSaved, onDele
         if (!alive) return
         savedJsonRef.current = JSON.stringify(m)
         setSong(m)
+        reconcileAfterLoad(m)
       })
       .catch(e => { if (alive) setMsg(e instanceof Error ? e.message : String(e)) })
     return () => { alive = false }
@@ -132,16 +198,20 @@ export function SongEditPanel({ songId, isPlaying, onSaved, onTitleSaved, onDele
         if (eng) eng.def.gain = t.gain ?? 1
       }
       engine.applyMix(getCurrentMix())
-      // 構成が変わっていればプレイヤーへ反映（再生中は停止まで保留）
+      // 構成が変わっていればプレイヤーへ反映を予約（再生中は停止まで保留、
+      // 停止中は最後の変更から少し静かになってから差分を1回だけ適用する）
       if (structuralSig(payload) !== engineSig()) {
+        applyNeededRef.current = true
         if (isPlayingRef.current) {
           setPendingApply(true)
         } else {
-          setPendingApply(false)
-          onSavedRef.current(payload.title)
+          requestApply()
         }
       } else {
+        applyNeededRef.current = false
         setPendingApply(false)
+        if (applyTimerRef.current) { clearTimeout(applyTimerRef.current); applyTimerRef.current = null }
+        setApplyPhase(prev => (prev === 'waiting' ? 'idle' : prev))
       }
     } catch (e) {
       setSyncPhase('error')
@@ -168,15 +238,14 @@ export function SongEditPanel({ songId, isPlaying, onSaved, onTitleSaved, onDele
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
   }, [song])
 
-  // ── 再生が止まったら、保留していた構成変更を反映する ──
+  // ── 再生が止まったら、保留していた構成変更を差分で1回だけ反映する ──
   const prevPlayingRef = useRef(isPlaying)
   useEffect(() => {
     const was = prevPlayingRef.current
     prevPlayingRef.current = isPlaying
     if (was && !isPlaying && pendingApply) {
       setPendingApply(false)
-      const t = songRef.current?.title
-      if (t) onSavedRef.current(t)
+      void runApplyRef.current()
     }
   }, [isPlaying, pendingApply])
 
@@ -307,6 +376,8 @@ export function SongEditPanel({ songId, isPlaying, onSaved, onTitleSaved, onDele
               <div className="sep-sync">
                 <span className={`sep-sync-text${syncPhase === 'error' ? ' error' : ''}`}>{syncText()}</span>
                 {pendingApply && <span className="sep-sync-pending">構成の反映は再生停止後</span>}
+                {!pendingApply && applyPhase === 'waiting' && <span className="sep-sync-pending">構成の反映待ち…</span>}
+                {!pendingApply && applyPhase === 'applying' && <span className="sep-sync-pending">構成を反映中…</span>}
                 <button className="mp-btn sub tiny" onClick={flushSave} disabled={syncPhase === 'saving'}>今すぐ保存</button>
               </div>
               {msg && <p className="mp-admin-msg">{msg}</p>}
@@ -355,7 +426,7 @@ export function SongEditPanel({ songId, isPlaying, onSaved, onTitleSaved, onDele
                 </div>
               </div>
 
-              <p className="mp-admin-note">変更は自動で保存されます。トラック構成やずらしは、停止中に自動でプレイヤーへ反映されます（再生中は停止後に反映）。</p>
+              <p className="mp-admin-note">変更は自動で保存されます。トラック構成やずらしは、操作が落ち着いてからまとめてプレイヤーへ反映されます（再生中は停止後に反映）。</p>
 
               <div className="mp-admin-row">
                 <button className="mp-btn danger" disabled={busy} onClick={deleteSong}>

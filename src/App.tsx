@@ -110,7 +110,7 @@ export default function App() {
   const {
     audioRef, currentTime, duration, isPlaying, src,
     togglePlayPause, seek, skip, playSection, clearRange,
-    loadUrl,
+    loadUrl, applyCurrentManifest,
     playbackRate, changePlaybackRate, loadState,
     pitchKeep, setPitchKeep, pendingRate, confirmRateChange, rateProcessing, rateError,
   } = useAudioPlayer()
@@ -334,10 +334,11 @@ export default function App() {
   }
 
   // 曲データ編集の保存後: 新しい構成でプレイヤーを読み込み直す
-  const handleSongSaved = (newTitle: string) => {
+  const handleSongSaved = async (newTitle: string) => {
     setFileName(newTitle)
+    // 構造変更は差分適用で反映する（全トラック再読み込みはしない）
+    await applyCurrentManifest()
     setMixerKey(k => k + 1)
-    if (fileKey) loadUrl(fileKey)
   }
 
   const handleSongDeleted = () => {
