@@ -11,6 +11,15 @@ export interface SyncStatus {
 
 const DEBOUNCE_MS = 1500
 
+/** ポーリングの基本間隔と上限（読み出しAPIの消費を抑えるための間引き） */
+export const POLL_BASE_MS = 60_000
+export const POLL_MAX_MS = 300_000
+
+/** 変化が無かった回数から次のポーリング間隔を決める（60秒→120秒→240秒→上限5分） */
+export function nextPollDelayMs(unchangedCount: number): number {
+  return Math.min(POLL_BASE_MS * 2 ** Math.max(0, unchangedCount), POLL_MAX_MS)
+}
+
 /** マーカー（点）→ RecPlay の区間（範囲）へ。区間iは次のマーカーまで。 */
 export function sectionsFromManifest(m: MpSongManifest, durationHint = 0): Section[] {
   const markers = [...m.markers].sort((a, b) => a.time - b.time)
@@ -129,27 +138,65 @@ export function useSectionSync(
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
   }, [sections, fileKey, mode])
 
-  // 再生モードでは10秒おきにポーリングし、他の人のマーカー編集を取り込む（RecPlay と同じ運用）
+  // 再生モードではポーリングし、他の人のマーカー編集を取り込む。
+  // 読み出しAPIの回数を抑えるため、基本間隔は60秒、変化が無い間は段階的に最大5分まで延ばす。
+  // タブが非表示の間は止め、再表示されたら間隔を戻してすぐ1回取りに行く。
   useEffect(() => {
     if (!fileKey || mode !== 'play' || FIXTURES) return
     let cancelled = false
-    const timer = setInterval(async () => {
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let unchanged = 0
+
+    const check = async (): Promise<boolean> => {
       try {
         const res = await fetch(`${songUrl(fileKey)}?v=${Date.now()}`, { cache: 'no-store' })
-        if (!res.ok || cancelled) return
+        if (!res.ok || cancelled) return false
         const m = (await res.json()) as MpSongManifest
-        if (cancelled || !m || m.id !== fileKey) return
+        if (cancelled || !m || m.id !== fileKey) return false
         const { engine } = await import('../multiplay/bridge')
         const secs = sectionsFromManifest(m, engine.duration)
         const json = JSON.stringify(secs)
-        if (json === remoteJsonRef.current) return
+        if (json === remoteJsonRef.current) return false
         setCurrentManifest(m)
         remoteJsonRef.current = json
         onRemoteRef.current(secs)
         setLastSyncedAt(new Date())
-      } catch { /* 取り込み失敗時は次の周期に回す */ }
-    }, 10_000)
-    return () => { cancelled = true; clearInterval(timer) }
+        return true
+      } catch { return false /* 取り込み失敗時は次の周期に回す */ }
+    }
+
+    const schedule = () => {
+      if (cancelled || document.visibilityState !== 'visible') return
+      timer = setTimeout(async () => {
+        timer = null
+        const changed = await check()
+        unchanged = changed ? 0 : unchanged + 1
+        schedule()
+      }, nextPollDelayMs(unchanged))
+    }
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        if (timer) { clearTimeout(timer); timer = null }
+        return
+      }
+      // 再表示されたら間隔を戻してすぐ取りに行く
+      if (timer) { clearTimeout(timer); timer = null }
+      unchanged = 0
+      ;(async () => {
+        const changed = await check()
+        unchanged = changed ? 0 : 1
+        schedule()
+      })()
+    }
+
+    document.addEventListener('visibilitychange', onVisibility)
+    schedule()
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
   }, [fileKey, mode])
 
   return { lastSyncedAt, isDirty }
